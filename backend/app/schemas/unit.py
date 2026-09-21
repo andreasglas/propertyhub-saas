@@ -13,6 +13,10 @@ class UnitCreate(UnitBase):
     pass
 
 
+class UnitUpdate(UnitBase):
+    pass
+
+
 class UnitRead(UnitBase):
     id: str
     organization_id: str

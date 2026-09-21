@@ -7,11 +7,16 @@ class TenantBase(BaseModel):
     first_name: str
     last_name: str
     email: EmailStr | None = None
+    phone: str | None = None
     move_in_date: date | None = None
     move_out_date: date | None = None
 
 
 class TenantCreate(TenantBase):
+    pass
+
+
+class TenantUpdate(TenantBase):
     pass
 
 
