@@ -42,6 +42,7 @@ cd backend
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements-dev.txt
+alembic upgrade head
 uvicorn app.main:app --reload
 ```
 
@@ -60,7 +61,7 @@ Das Frontend nutzt im Development standardmäßig den relativen Pfad `/api`; lok
 - FastAPI App mit versionierter API-Struktur
 - Konfigurationsmanagement via Pydantic Settings
 - SQLAlchemy-Setup für PostgreSQL-kompatible Persistenz
-- JWT-Sicherheitsbausteine und Dependency-Grundlagen
+- JWT-Sicherheitsbausteine mit DB-basierter Benutzer-Authentifizierung
 - Celery- und Redis-Grundstruktur für Hintergrundjobs
 - React/Vite/MUI-Dashboard-Starter
 - Zentrale API-Client-Abstraktion im Frontend

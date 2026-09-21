@@ -1,33 +1,32 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
+from sqlalchemy.orm import Session
 
-from app.config import get_settings
-from app.core.security import create_access_token
+from app.core.security import create_access_token, verify_password
+from app.db.models.user import User
+from app.db.session import get_db
 from app.schemas.user import Token
+from sqlalchemy import select
 
 router = APIRouter()
-settings = get_settings()
 
 
 @router.post("/token", response_model=Token)
 async def issue_access_token(
     credentials: OAuth2PasswordRequestForm = Depends(),
+    db: Session = Depends(get_db),
 ) -> Token:
-    configured_password = settings.bootstrap_admin_password
-    if not settings.bootstrap_admin_email or configured_password is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Bootstrap admin credentials are not configured",
-        )
-
+    user = db.scalar(select(User).where(User.email == credentials.username))
     if (
-        credentials.username != settings.bootstrap_admin_email
-        or credentials.password != configured_password.get_secret_value()
+        user is None
+        or not user.hashed_password
+        or not user.is_active
+        or not verify_password(credentials.password, user.hashed_password)
     ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
         )
 
-    token = create_access_token(subject=credentials.username)
+    token = create_access_token(subject=user.email)
     return Token(access_token=token)

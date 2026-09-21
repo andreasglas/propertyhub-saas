@@ -27,3 +27,4 @@ backend/.env
 
 # Build / runtime
 *.log
+*.db

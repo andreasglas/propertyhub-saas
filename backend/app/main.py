@@ -6,7 +6,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1 import api_router
 from app.config import get_settings
 from app.core.exceptions import register_exception_handlers
-from app.db.session import close_db_connections
+from app.db.session import SessionLocal, close_db_connections, init_db
+from app.services.user_service import UserService
 from app.utils.logger import configure_logging, get_logger
 
 settings = get_settings()
@@ -16,6 +17,10 @@ logger = get_logger(__name__)
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    if not settings.is_production:
+        init_db()
+        with SessionLocal() as db:
+            UserService().ensure_bootstrap_admin(db)
     logger.info("application_startup", env=settings.app_env)
     yield
     close_db_connections()

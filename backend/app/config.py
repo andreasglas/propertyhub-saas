@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     backend_cors_origins: list[str] = ["http://localhost:5173", "http://localhost:3000"]
     bootstrap_admin_email: str | None = None
     bootstrap_admin_password: SecretStr | None = None
+    bootstrap_admin_organization_id: str = "00000000-0000-0000-0000-000000000001"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

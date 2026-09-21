@@ -29,11 +29,17 @@ Beispiel-Felder:
 - `username=admin@example.com`
 - zusätzlich das konfigurierte Passwortfeld `password`
 
+Die Anmeldung validiert gegen Benutzer in der Datenbank. Für lokale Entwicklung kann ein initialer Admin über `BOOTSTRAP_ADMIN_*` beim Start angelegt werden.
+
 ## Fachmodule
 
 Die folgenden Module sind als strukturierte Einstiegspunkte vorhanden:
 
 - `GET /api/v1/properties/`
+- `POST /api/v1/properties/`
+- `GET /api/v1/properties/{property_id}`
+- `PUT /api/v1/properties/{property_id}`
+- `DELETE /api/v1/properties/{property_id}`
 - `GET /api/v1/tenants/`
 - `GET /api/v1/units/`
 - `GET /api/v1/contracts/`

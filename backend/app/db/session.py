@@ -4,6 +4,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import get_settings
+from app.db.base import Base
 
 settings = get_settings()
 
@@ -21,3 +22,7 @@ def get_db() -> Generator[Session, None, None]:
 
 def close_db_connections() -> None:
     engine.dispose()
+
+
+def init_db() -> None:
+    Base.metadata.create_all(bind=engine)
