@@ -26,7 +26,7 @@ Request:
 
 ```json
 {
-  "email": "admin@propertyhub.local",
+  "email": "admin@example.com",
   "password": "change-me"
 }
 ```
