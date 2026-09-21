@@ -24,10 +24,10 @@ Erzeugt ein JWT für lokale Entwicklung oder spätere Login-Integrationen.
 
 Request (`application/x-www-form-urlencoded`):
 
-```text
-username=admin@example.com
-******
-```
+Beispiel-Felder:
+
+- `username=admin@example.com`
+- zusätzlich das konfigurierte Passwortfeld `password`
 
 ## Fachmodule
 
