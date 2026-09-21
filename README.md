@@ -53,6 +53,8 @@ npm ci
 npm run dev
 ```
 
+Das Frontend nutzt im Development standardmäßig den relativen Pfad `/api`; lokal übernimmt Vite das Proxying auf das Backend.
+
 ## Kernfunktionen des Grundgerüsts
 
 - FastAPI App mit versionierter API-Struktur

@@ -22,13 +22,11 @@ Liefert Metadaten zur API-Version.
 
 Erzeugt ein JWT für lokale Entwicklung oder spätere Login-Integrationen.
 
-Request:
+Request (`application/x-www-form-urlencoded`):
 
-```json
-{
-  "email": "admin@example.com",
-  "password": "change-me"
-}
+```text
+username=admin@example.com
+******
 ```
 
 ## Fachmodule
