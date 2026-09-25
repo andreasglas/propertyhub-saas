@@ -2,6 +2,8 @@ from fastapi.testclient import TestClient
 
 from app.core.security import get_password_hash
 from app.db.models.property import Property
+from app.db.models.tenant import Tenant
+from app.db.models.unit import Unit
 from app.db.models.user import User
 from app.db.session import SessionLocal
 
@@ -316,3 +318,283 @@ def test_tenants_are_scoped_to_authenticated_organization(
         f"/api/v1/tenants/{tenant_id}", headers=other_headers
     )
     assert detail_response.status_code == 404
+
+
+def test_contracts_crud_flow(client: TestClient, auth_headers: dict[str, str]) -> None:
+    property_response = client.post(
+        "/api/v1/properties/",
+        headers=auth_headers,
+        json={
+            "name": "Contract Haus",
+            "property_type": "residential",
+            "street": "Vertragsweg 2",
+            "postal_code": "80331",
+            "city": "München",
+            "purchase_price": 950000,
+        },
+    )
+    property_id = property_response.json()["id"]
+
+    unit_response = client.post(
+        "/api/v1/units/",
+        headers=auth_headers,
+        json={
+            "property_id": property_id,
+            "name": "Wohnung 2B",
+            "unit_type": "apartment",
+            "status": "vacant",
+            "area_sqm": 68.0,
+        },
+    )
+    tenant_response = client.post(
+        "/api/v1/tenants/",
+        headers=auth_headers,
+        json={
+            "first_name": "Anna",
+            "last_name": "Mieterin",
+            "email": "anna@example.com",
+            "phone": "+49301234567",
+            "move_in_date": "2026-03-01",
+            "move_out_date": None,
+        },
+    )
+    unit_id = unit_response.json()["id"]
+    tenant_id = tenant_response.json()["id"]
+
+    create_response = client.post(
+        "/api/v1/contracts/",
+        headers=auth_headers,
+        json={
+            "unit_id": unit_id,
+            "tenant_id": tenant_id,
+            "start_date": "2026-04-01",
+            "end_date": None,
+            "cold_rent": 1250,
+            "service_charge_advance": 280,
+        },
+    )
+    assert create_response.status_code == 201
+    created = create_response.json()
+    contract_id = created["id"]
+    assert created["unit_id"] == unit_id
+    assert created["tenant_id"] == tenant_id
+
+    list_response = client.get("/api/v1/contracts/", headers=auth_headers)
+    assert list_response.status_code == 200
+    assert len(list_response.json()) == 1
+
+    get_response = client.get(
+        f"/api/v1/contracts/{contract_id}", headers=auth_headers
+    )
+    assert get_response.status_code == 200
+    assert get_response.json()["cold_rent"] == 1250
+
+    update_response = client.put(
+        f"/api/v1/contracts/{contract_id}",
+        headers=auth_headers,
+        json={
+            "unit_id": unit_id,
+            "tenant_id": tenant_id,
+            "start_date": "2026-04-01",
+            "end_date": "2027-03-31",
+            "cold_rent": 1290,
+            "service_charge_advance": 300,
+        },
+    )
+    assert update_response.status_code == 200
+    assert update_response.json()["end_date"] == "2027-03-31"
+    assert update_response.json()["service_charge_advance"] == 300
+
+    delete_response = client.delete(
+        f"/api/v1/contracts/{contract_id}", headers=auth_headers
+    )
+    assert delete_response.status_code == 204
+
+
+def test_contract_creation_requires_unit_and_tenant_in_same_organization(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    with SessionLocal() as db:
+        foreign_property = Property(
+            organization_id="00000000-0000-0000-0000-000000000099",
+            name="Fremdobjekt",
+            property_type="residential",
+            street="Außen 8",
+            postal_code="11111",
+            city="Extern",
+        )
+        db.add(foreign_property)
+        db.flush()
+
+        foreign_unit = Unit(
+            organization_id="00000000-0000-0000-0000-000000000099",
+            property_id=foreign_property.id,
+            name="Unit Fremd",
+            unit_type="apartment",
+            status="vacant",
+        )
+        foreign_tenant = Tenant(
+            organization_id="00000000-0000-0000-0000-000000000099",
+            first_name="Fremd",
+            last_name="Mieter",
+            email="fremd@example.com",
+        )
+        db.add_all([foreign_unit, foreign_tenant])
+        db.commit()
+        db.refresh(foreign_unit)
+        db.refresh(foreign_tenant)
+
+        foreign_unit_id = foreign_unit.id
+        foreign_tenant_id = foreign_tenant.id
+
+    response = client.post(
+        "/api/v1/contracts/",
+        headers=auth_headers,
+        json={
+            "unit_id": foreign_unit_id,
+            "tenant_id": foreign_tenant_id,
+            "start_date": "2026-04-01",
+            "end_date": None,
+            "cold_rent": 1000,
+            "service_charge_advance": 200,
+        },
+    )
+    assert response.status_code == 404
+
+
+def test_contracts_are_scoped_to_authenticated_organization(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    property_response = client.post(
+        "/api/v1/properties/",
+        headers=auth_headers,
+        json={
+            "name": "Scope Haus",
+            "property_type": "residential",
+            "street": "Scope 1",
+            "postal_code": "50667",
+            "city": "Köln",
+            "purchase_price": 600000,
+        },
+    )
+    property_id = property_response.json()["id"]
+    unit_response = client.post(
+        "/api/v1/units/",
+        headers=auth_headers,
+        json={
+            "property_id": property_id,
+            "name": "Scope Unit",
+            "unit_type": "apartment",
+            "status": "vacant",
+            "area_sqm": 60,
+        },
+    )
+    tenant_response = client.post(
+        "/api/v1/tenants/",
+        headers=auth_headers,
+        json={
+            "first_name": "Scope",
+            "last_name": "Tenant",
+            "email": "scope@example.com",
+            "phone": "+4930555555",
+            "move_in_date": "2026-05-01",
+            "move_out_date": None,
+        },
+    )
+    create_response = client.post(
+        "/api/v1/contracts/",
+        headers=auth_headers,
+        json={
+            "unit_id": unit_response.json()["id"],
+            "tenant_id": tenant_response.json()["id"],
+            "start_date": "2026-06-01",
+            "end_date": None,
+            "cold_rent": 1100,
+            "service_charge_advance": 250,
+        },
+    )
+    contract_id = create_response.json()["id"]
+
+    with SessionLocal() as db:
+        db.add(
+            User(
+                organization_id="00000000-0000-0000-0000-000000000099",
+                email="contract-scope@example.com",
+                full_name="Contract Scope User",
+                hashed_password=get_password_hash("scope-password"),
+                role="owner",
+                is_active=True,
+            )
+        )
+        db.commit()
+
+    login_response = client.post(
+        "/api/v1/auth/token",
+        data={"username": "contract-scope@example.com", "password": "scope-password"},
+    )
+    other_headers = {
+        "Authorization": "Bearer " + login_response.json()["access_token"]
+    }
+
+    list_response = client.get("/api/v1/contracts/", headers=other_headers)
+    assert list_response.status_code == 200
+    assert list_response.json() == []
+
+    detail_response = client.get(
+        f"/api/v1/contracts/{contract_id}", headers=other_headers
+    )
+    assert detail_response.status_code == 404
+
+
+def test_contract_end_date_must_not_precede_start_date(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    property_response = client.post(
+        "/api/v1/properties/",
+        headers=auth_headers,
+        json={
+            "name": "Date Haus",
+            "property_type": "residential",
+            "street": "Datum 1",
+            "postal_code": "04109",
+            "city": "Leipzig",
+            "purchase_price": 400000,
+        },
+    )
+    unit_response = client.post(
+        "/api/v1/units/",
+        headers=auth_headers,
+        json={
+            "property_id": property_response.json()["id"],
+            "name": "Date Unit",
+            "unit_type": "apartment",
+            "status": "vacant",
+            "area_sqm": 50,
+        },
+    )
+    tenant_response = client.post(
+        "/api/v1/tenants/",
+        headers=auth_headers,
+        json={
+            "first_name": "Datum",
+            "last_name": "Test",
+            "email": "datum@example.com",
+            "phone": "+49123400000",
+            "move_in_date": "2026-06-01",
+            "move_out_date": None,
+        },
+    )
+
+    response = client.post(
+        "/api/v1/contracts/",
+        headers=auth_headers,
+        json={
+            "unit_id": unit_response.json()["id"],
+            "tenant_id": tenant_response.json()["id"],
+            "start_date": "2026-06-15",
+            "end_date": "2026-06-01",
+            "cold_rent": 950,
+            "service_charge_advance": 180,
+        },
+    )
+    assert response.status_code == 422
