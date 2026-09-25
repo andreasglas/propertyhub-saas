@@ -73,6 +73,8 @@ Die folgenden Module sind als strukturierte Einstiegspunkte vorhanden:
 - `DELETE /api/v1/accounting/{entry_id}`
 - `GET /api/v1/reports/`
 
+Der Reporting-Endpunkt liefert aktuell eine Dashboard-Zusammenfassung mit Zählern und Summen für Immobilien, Verträge, Rechnungen, Zahlungen und Accounting Entries.
+
 Alle Antworten liefern im Initial-Setup einen statusorientierten Payload, damit die Endpunkte früh integrierbar sind und später schrittweise mit Geschäftslogik hinterlegt werden können.
 
 ## Nächste API-Schritte

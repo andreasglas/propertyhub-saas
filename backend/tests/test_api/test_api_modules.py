@@ -1042,3 +1042,176 @@ def test_accounting_entries_are_scoped_to_authenticated_organization(
         f"/api/v1/accounting/{entry_id}", headers=other_headers
     )
     assert detail_response.status_code == 404
+
+
+def test_reports_dashboard_summary_returns_aggregated_metrics(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    property_response = client.post(
+        "/api/v1/properties/",
+        headers=auth_headers,
+        json={
+            "name": "Reporting Haus",
+            "property_type": "residential",
+            "street": "Reportweg 12",
+            "postal_code": "60311",
+            "city": "Frankfurt",
+            "purchase_price": 810000,
+        },
+    )
+    property_id = property_response.json()["id"]
+
+    unit_response = client.post(
+        "/api/v1/units/",
+        headers=auth_headers,
+        json={
+            "property_id": property_id,
+            "name": "Report Unit",
+            "unit_type": "apartment",
+            "status": "occupied",
+            "area_sqm": 71,
+        },
+    )
+    tenant_response = client.post(
+        "/api/v1/tenants/",
+        headers=auth_headers,
+        json={
+            "first_name": "Report",
+            "last_name": "Tenant",
+            "email": "report@example.com",
+            "phone": "+4969123456",
+            "move_in_date": "2026-11-01",
+            "move_out_date": None,
+        },
+    )
+    contract_response = client.post(
+        "/api/v1/contracts/",
+        headers=auth_headers,
+        json={
+            "unit_id": unit_response.json()["id"],
+            "tenant_id": tenant_response.json()["id"],
+            "start_date": "2026-11-01",
+            "end_date": None,
+            "cold_rent": 1400,
+            "service_charge_advance": 300,
+        },
+    )
+    invoice_response = client.post(
+        "/api/v1/invoices/",
+        headers=auth_headers,
+        json={
+            "property_id": property_id,
+            "vendor_name": "Report Energie",
+            "invoice_number": "REP-001",
+            "invoice_date": "2026-11-02",
+            "gross_amount": 420,
+            "status": "received",
+        },
+    )
+    client.post(
+        "/api/v1/payments/",
+        headers=auth_headers,
+        json={
+            "invoice_id": invoice_response.json()["id"],
+            "contract_id": contract_response.json()["id"],
+            "amount": 420,
+            "booking_date": "2026-11-03",
+            "reference": "REPORT-PAY",
+        },
+    )
+    client.post(
+        "/api/v1/accounting/",
+        headers=auth_headers,
+        json={
+            "property_id": property_id,
+            "entry_type": "income",
+            "category": "rent",
+            "amount": 1400,
+            "booking_date": "2026-11-05",
+        },
+    )
+    client.post(
+        "/api/v1/accounting/",
+        headers=auth_headers,
+        json={
+            "property_id": property_id,
+            "entry_type": "expense",
+            "category": "heating",
+            "amount": 220,
+            "booking_date": "2026-11-06",
+        },
+    )
+
+    response = client.get("/api/v1/reports/", headers=auth_headers)
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["properties_count"] == 1
+    assert payload["units_count"] == 1
+    assert payload["tenants_count"] == 1
+    assert payload["contracts_count"] == 1
+    assert payload["invoices_count"] == 1
+    assert payload["open_invoices_count"] == 1
+    assert payload["payments_count"] == 1
+    assert payload["accounting_entries_count"] == 2
+    assert payload["total_invoice_amount"] == 420
+    assert payload["total_payment_amount"] == 420
+    assert payload["total_income_amount"] == 1400
+    assert payload["total_expense_amount"] == 220
+
+
+def test_reports_dashboard_summary_is_organization_scoped(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    property_response = client.post(
+        "/api/v1/properties/",
+        headers=auth_headers,
+        json={
+            "name": "Scope Report Haus",
+            "property_type": "residential",
+            "street": "Scope 22",
+            "postal_code": "90402",
+            "city": "Nürnberg",
+            "purchase_price": 500000,
+        },
+    )
+    client.post(
+        "/api/v1/accounting/",
+        headers=auth_headers,
+        json={
+            "property_id": property_response.json()["id"],
+            "entry_type": "income",
+            "category": "rent",
+            "amount": 1000,
+            "booking_date": "2026-11-07",
+        },
+    )
+
+    with SessionLocal() as db:
+        db.add(
+            User(
+                organization_id="00000000-0000-0000-0000-000000000099",
+                email="report-scope@example.com",
+                full_name="Report Scope User",
+                hashed_password=get_password_hash("scope-password"),
+                role="owner",
+                is_active=True,
+            )
+        )
+        db.commit()
+
+    login_response = client.post(
+        "/api/v1/auth/token",
+        data={"username": "report-scope@example.com", "password": "scope-password"},
+    )
+    other_headers = {
+        "Authorization": "Bearer " + login_response.json()["access_token"]
+    }
+
+    response = client.get("/api/v1/reports/", headers=other_headers)
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["properties_count"] == 0
+    assert payload["accounting_entries_count"] == 0
+    assert payload["total_income_amount"] == 0
