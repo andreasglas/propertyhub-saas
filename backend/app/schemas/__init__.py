@@ -3,6 +3,12 @@ from app.schemas.accounting import (
     AccountingEntryRead,
     AccountingEntryUpdate,
 )
+from app.schemas.banking import (
+    BankImportResult,
+    BankTransactionCreate,
+    BankTransactionRead,
+    BankTransactionUpdate,
+)
 from app.schemas.contract import ContractCreate, ContractRead, ContractUpdate
 from app.schemas.invoice import InvoiceCreate, InvoiceRead, InvoiceUpdate
 from app.schemas.payment import PaymentCreate, PaymentRead, PaymentUpdate
@@ -19,6 +25,10 @@ __all__ = [
     "AccountingEntryCreate",
     "AccountingEntryRead",
     "AccountingEntryUpdate",
+    "BankImportResult",
+    "BankTransactionCreate",
+    "BankTransactionRead",
+    "BankTransactionUpdate",
     "InvoiceCreate",
     "InvoiceRead",
     "InvoiceUpdate",

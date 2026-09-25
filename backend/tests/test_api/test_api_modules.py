@@ -1215,3 +1215,128 @@ def test_reports_dashboard_summary_is_organization_scoped(
     assert payload["properties_count"] == 0
     assert payload["accounting_entries_count"] == 0
     assert payload["total_income_amount"] == 0
+
+
+def test_banking_transactions_crud_and_import_stub(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    import_response = client.post("/api/v1/banking/import-stub", headers=auth_headers)
+    assert import_response.status_code == 200
+    imported = import_response.json()
+    assert imported["imported_count"] == 2
+    assert len(imported["transactions"]) == 2
+
+    create_response = client.post(
+        "/api/v1/banking/transactions",
+        headers=auth_headers,
+        json={
+            "payment_id": None,
+            "external_id": "manual-001",
+            "account_name": "Geschäftskonto",
+            "transaction_type": "credit",
+            "booking_date": "2026-07-20",
+            "value_date": "2026-07-20",
+            "amount": 1200,
+            "currency": "EUR",
+            "counterparty_name": "Mieterin Beispiel",
+            "iban": "DE44500105175407324931",
+            "reference": "Miete Juli",
+            "status": "manual",
+        },
+    )
+    assert create_response.status_code == 201
+    transaction = create_response.json()
+    transaction_id = transaction["id"]
+    assert transaction["organization_id"] == "00000000-0000-0000-0000-000000000001"
+
+    list_response = client.get("/api/v1/banking/", headers=auth_headers)
+    assert list_response.status_code == 200
+    assert len(list_response.json()) == 3
+
+    get_response = client.get(
+        f"/api/v1/banking/transactions/{transaction_id}", headers=auth_headers
+    )
+    assert get_response.status_code == 200
+    assert get_response.json()["reference"] == "Miete Juli"
+
+    update_response = client.put(
+        f"/api/v1/banking/transactions/{transaction_id}",
+        headers=auth_headers,
+        json={
+            "payment_id": None,
+            "external_id": "manual-001",
+            "account_name": "Geschäftskonto",
+            "transaction_type": "credit",
+            "booking_date": "2026-07-21",
+            "value_date": "2026-07-21",
+            "amount": 1250,
+            "currency": "EUR",
+            "counterparty_name": "Mieterin Beispiel",
+            "iban": "DE44500105175407324931",
+            "reference": "Miete Juli korrigiert",
+            "status": "matched",
+        },
+    )
+    assert update_response.status_code == 200
+    assert update_response.json()["amount"] == 1250
+    assert update_response.json()["status"] == "matched"
+
+    delete_response = client.delete(
+        f"/api/v1/banking/transactions/{transaction_id}", headers=auth_headers
+    )
+    assert delete_response.status_code == 204
+
+
+def test_banking_transactions_are_scoped_to_authenticated_organization(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    create_response = client.post(
+        "/api/v1/banking/transactions",
+        headers=auth_headers,
+        json={
+            "payment_id": None,
+            "external_id": "org-a-001",
+            "account_name": "Geschäftskonto",
+            "transaction_type": "credit",
+            "booking_date": "2026-08-01",
+            "value_date": "2026-08-01",
+            "amount": 850,
+            "currency": "EUR",
+            "counterparty_name": "Org A Mieter",
+            "iban": "DE44500105175407324931",
+            "reference": "Augustmiete",
+            "status": "imported",
+        },
+    )
+    assert create_response.status_code == 201
+    transaction_id = create_response.json()["id"]
+
+    with SessionLocal() as db:
+        db.add(
+            User(
+                organization_id="00000000-0000-0000-0000-000000000099",
+                email="banking-scope@example.com",
+                full_name="Banking Scope User",
+                hashed_password=get_password_hash("scope-password"),
+                role="owner",
+                is_active=True,
+            )
+        )
+        db.commit()
+
+    login_response = client.post(
+        "/api/v1/auth/token",
+        data={"username": "banking-scope@example.com", "password": "scope-password"},
+    )
+    other_headers = {
+        "Authorization": "Bearer " + login_response.json()["access_token"]
+    }
+
+    list_response = client.get("/api/v1/banking/", headers=other_headers)
+    assert list_response.status_code == 200
+    assert list_response.json() == []
+
+    detail_response = client.get(
+        f"/api/v1/banking/transactions/{transaction_id}", headers=other_headers
+    )
+    assert detail_response.status_code == 404
