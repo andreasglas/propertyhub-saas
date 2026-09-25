@@ -1,5 +1,6 @@
 from app.schemas.contract import ContractCreate, ContractRead, ContractUpdate
-from app.schemas.invoice import InvoiceCreate, InvoiceRead
+from app.schemas.invoice import InvoiceCreate, InvoiceRead, InvoiceUpdate
+from app.schemas.payment import PaymentCreate, PaymentRead, PaymentUpdate
 from app.schemas.property import PropertyCreate, PropertyRead, PropertyUpdate
 from app.schemas.tenant import TenantCreate, TenantRead, TenantUpdate
 from app.schemas.unit import UnitCreate, UnitRead, UnitUpdate
@@ -11,7 +12,11 @@ __all__ = [
     "ContractUpdate",
     "InvoiceCreate",
     "InvoiceRead",
+    "InvoiceUpdate",
     "LoginRequest",
+    "PaymentCreate",
+    "PaymentRead",
+    "PaymentUpdate",
     "PropertyCreate",
     "PropertyRead",
     "PropertyUpdate",

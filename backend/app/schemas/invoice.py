@@ -1,6 +1,6 @@
 from datetime import date
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class InvoiceBase(BaseModel):
@@ -8,11 +8,15 @@ class InvoiceBase(BaseModel):
     vendor_name: str
     invoice_number: str | None = None
     invoice_date: date | None = None
-    gross_amount: float
+    gross_amount: float = Field(gt=0)
     status: str = "draft"
 
 
 class InvoiceCreate(InvoiceBase):
+    pass
+
+
+class InvoiceUpdate(InvoiceBase):
     pass
 
 

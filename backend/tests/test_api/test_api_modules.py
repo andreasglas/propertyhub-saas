@@ -598,3 +598,294 @@ def test_contract_end_date_must_not_precede_start_date(
         },
     )
     assert response.status_code == 422
+
+
+def test_invoices_crud_flow(client: TestClient, auth_headers: dict[str, str]) -> None:
+    property_response = client.post(
+        "/api/v1/properties/",
+        headers=auth_headers,
+        json={
+            "name": "Invoice Haus",
+            "property_type": "residential",
+            "street": "Rechnungsgasse 5",
+            "postal_code": "20095",
+            "city": "Hamburg",
+            "purchase_price": 720000,
+        },
+    )
+    property_id = property_response.json()["id"]
+
+    create_response = client.post(
+        "/api/v1/invoices/",
+        headers=auth_headers,
+        json={
+            "property_id": property_id,
+            "vendor_name": "Stadtwerke Hamburg",
+            "invoice_number": "INV-2026-001",
+            "invoice_date": "2026-07-01",
+            "gross_amount": 325.5,
+            "status": "received",
+        },
+    )
+    assert create_response.status_code == 201
+    created = create_response.json()
+    invoice_id = created["id"]
+    assert created["vendor_name"] == "Stadtwerke Hamburg"
+
+    list_response = client.get("/api/v1/invoices/", headers=auth_headers)
+    assert list_response.status_code == 200
+    assert len(list_response.json()) == 1
+
+    get_response = client.get(
+        f"/api/v1/invoices/{invoice_id}", headers=auth_headers
+    )
+    assert get_response.status_code == 200
+    assert get_response.json()["gross_amount"] == 325.5
+
+    update_response = client.put(
+        f"/api/v1/invoices/{invoice_id}",
+        headers=auth_headers,
+        json={
+            "property_id": property_id,
+            "vendor_name": "Stadtwerke Hamburg",
+            "invoice_number": "INV-2026-001",
+            "invoice_date": "2026-07-01",
+            "gross_amount": 349.9,
+            "status": "approved",
+        },
+    )
+    assert update_response.status_code == 200
+    assert update_response.json()["status"] == "approved"
+
+    delete_response = client.delete(
+        f"/api/v1/invoices/{invoice_id}", headers=auth_headers
+    )
+    assert delete_response.status_code == 204
+
+
+def test_invoice_creation_requires_property_in_same_organization(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    with SessionLocal() as db:
+        foreign_property = Property(
+            organization_id="00000000-0000-0000-0000-000000000099",
+            name="Fremdes Rechnungsobjekt",
+            property_type="residential",
+            street="Extern 11",
+            postal_code="99999",
+            city="Extern",
+        )
+        db.add(foreign_property)
+        db.commit()
+        db.refresh(foreign_property)
+        foreign_property_id = foreign_property.id
+
+    response = client.post(
+        "/api/v1/invoices/",
+        headers=auth_headers,
+        json={
+            "property_id": foreign_property_id,
+            "vendor_name": "Fremdlieferant",
+            "invoice_number": "INV-X",
+            "invoice_date": "2026-07-01",
+            "gross_amount": 99,
+            "status": "received",
+        },
+    )
+    assert response.status_code == 404
+
+
+def test_payments_crud_flow(client: TestClient, auth_headers: dict[str, str]) -> None:
+    property_response = client.post(
+        "/api/v1/properties/",
+        headers=auth_headers,
+        json={
+            "name": "Payment Haus",
+            "property_type": "residential",
+            "street": "Zahlungsweg 4",
+            "postal_code": "50667",
+            "city": "Köln",
+            "purchase_price": 610000,
+        },
+    )
+    property_id = property_response.json()["id"]
+    unit_response = client.post(
+        "/api/v1/units/",
+        headers=auth_headers,
+        json={
+            "property_id": property_id,
+            "name": "Payment Unit",
+            "unit_type": "apartment",
+            "status": "occupied",
+            "area_sqm": 63,
+        },
+    )
+    tenant_response = client.post(
+        "/api/v1/tenants/",
+        headers=auth_headers,
+        json={
+            "first_name": "Peter",
+            "last_name": "Zahler",
+            "email": "peter@example.com",
+            "phone": "+49221123456",
+            "move_in_date": "2026-08-01",
+            "move_out_date": None,
+        },
+    )
+    contract_response = client.post(
+        "/api/v1/contracts/",
+        headers=auth_headers,
+        json={
+            "unit_id": unit_response.json()["id"],
+            "tenant_id": tenant_response.json()["id"],
+            "start_date": "2026-08-01",
+            "end_date": None,
+            "cold_rent": 1150,
+            "service_charge_advance": 240,
+        },
+    )
+    invoice_response = client.post(
+        "/api/v1/invoices/",
+        headers=auth_headers,
+        json={
+            "property_id": property_id,
+            "vendor_name": "Versicherung AG",
+            "invoice_number": "INV-2026-900",
+            "invoice_date": "2026-08-15",
+            "gross_amount": 480,
+            "status": "received",
+        },
+    )
+
+    create_response = client.post(
+        "/api/v1/payments/",
+        headers=auth_headers,
+        json={
+            "invoice_id": invoice_response.json()["id"],
+            "contract_id": contract_response.json()["id"],
+            "amount": 480,
+            "booking_date": "2026-08-20",
+            "reference": "SEPA-2026-08",
+        },
+    )
+    assert create_response.status_code == 201
+    created = create_response.json()
+    payment_id = created["id"]
+    assert created["reference"] == "SEPA-2026-08"
+
+    list_response = client.get("/api/v1/payments/", headers=auth_headers)
+    assert list_response.status_code == 200
+    assert len(list_response.json()) == 1
+
+    get_response = client.get(
+        f"/api/v1/payments/{payment_id}", headers=auth_headers
+    )
+    assert get_response.status_code == 200
+    assert get_response.json()["amount"] == 480
+
+    update_response = client.put(
+        f"/api/v1/payments/{payment_id}",
+        headers=auth_headers,
+        json={
+            "invoice_id": invoice_response.json()["id"],
+            "contract_id": contract_response.json()["id"],
+            "amount": 500,
+            "booking_date": "2026-08-21",
+            "reference": "SEPA-2026-08-UPD",
+        },
+    )
+    assert update_response.status_code == 200
+    assert update_response.json()["amount"] == 500
+
+    delete_response = client.delete(
+        f"/api/v1/payments/{payment_id}", headers=auth_headers
+    )
+    assert delete_response.status_code == 204
+
+
+def test_payment_requires_reference_to_invoice_or_contract(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    response = client.post(
+        "/api/v1/payments/",
+        headers=auth_headers,
+        json={
+            "invoice_id": None,
+            "contract_id": None,
+            "amount": 100,
+            "booking_date": "2026-08-20",
+            "reference": "INVALID",
+        },
+    )
+    assert response.status_code == 422
+
+
+def test_payments_are_scoped_to_authenticated_organization(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    property_response = client.post(
+        "/api/v1/properties/",
+        headers=auth_headers,
+        json={
+            "name": "Scoped Payment Haus",
+            "property_type": "residential",
+            "street": "Scope Zahlung 1",
+            "postal_code": "01067",
+            "city": "Dresden",
+            "purchase_price": 550000,
+        },
+    )
+    invoice_response = client.post(
+        "/api/v1/invoices/",
+        headers=auth_headers,
+        json={
+            "property_id": property_response.json()["id"],
+            "vendor_name": "Scoped Lieferant",
+            "invoice_number": "INV-SCOPE-1",
+            "invoice_date": "2026-09-01",
+            "gross_amount": 150,
+            "status": "received",
+        },
+    )
+    create_response = client.post(
+        "/api/v1/payments/",
+        headers=auth_headers,
+        json={
+            "invoice_id": invoice_response.json()["id"],
+            "contract_id": None,
+            "amount": 150,
+            "booking_date": "2026-09-02",
+            "reference": "SCOPE-PAY",
+        },
+    )
+    payment_id = create_response.json()["id"]
+
+    with SessionLocal() as db:
+        db.add(
+            User(
+                organization_id="00000000-0000-0000-0000-000000000099",
+                email="payment-scope@example.com",
+                full_name="Payment Scope User",
+                hashed_password=get_password_hash("scope-password"),
+                role="owner",
+                is_active=True,
+            )
+        )
+        db.commit()
+
+    login_response = client.post(
+        "/api/v1/auth/token",
+        data={"username": "payment-scope@example.com", "password": "scope-password"},
+    )
+    other_headers = {
+        "Authorization": "Bearer " + login_response.json()["access_token"]
+    }
+
+    list_response = client.get("/api/v1/payments/", headers=other_headers)
+    assert list_response.status_code == 200
+    assert list_response.json() == []
+
+    detail_response = client.get(
+        f"/api/v1/payments/{payment_id}", headers=other_headers
+    )
+    assert detail_response.status_code == 404

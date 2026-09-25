@@ -56,6 +56,15 @@ Die folgenden Module sind als strukturierte Einstiegspunkte vorhanden:
 - `PUT /api/v1/contracts/{contract_id}`
 - `DELETE /api/v1/contracts/{contract_id}`
 - `GET /api/v1/invoices/`
+- `POST /api/v1/invoices/`
+- `GET /api/v1/invoices/{invoice_id}`
+- `PUT /api/v1/invoices/{invoice_id}`
+- `DELETE /api/v1/invoices/{invoice_id}`
+- `GET /api/v1/payments/`
+- `POST /api/v1/payments/`
+- `GET /api/v1/payments/{payment_id}`
+- `PUT /api/v1/payments/{payment_id}`
+- `DELETE /api/v1/payments/{payment_id}`
 - `GET /api/v1/banking/`
 - `GET /api/v1/accounting/`
 - `GET /api/v1/reports/`
