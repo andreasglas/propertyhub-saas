@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.orm import Session
 
-from app.core.dependencies import get_current_user
+from app.core.dependencies import get_current_user, require_roles
 from app.db.models.user import User
 from app.db.session import get_db
 from app.schemas.contract import ContractCreate, ContractRead, ContractUpdate
@@ -22,7 +22,7 @@ async def list_contracts(
 @router.post("/", response_model=ContractRead, status_code=status.HTTP_201_CREATED)
 async def create_contract(
     payload: ContractCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles("owner", "manager")),
     db: Session = Depends(get_db),
 ) -> ContractRead:
     return service.create_contract(db, current_user.organization_id, payload)
@@ -41,7 +41,7 @@ async def get_contract(
 async def update_contract(
     contract_id: str,
     payload: ContractUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles("owner", "manager")),
     db: Session = Depends(get_db),
 ) -> ContractRead:
     return service.update_contract(db, current_user.organization_id, contract_id, payload)
@@ -50,7 +50,7 @@ async def update_contract(
 @router.delete("/{contract_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_contract(
     contract_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles("owner", "manager")),
     db: Session = Depends(get_db),
 ) -> Response:
     service.delete_contract(db, current_user.organization_id, contract_id)

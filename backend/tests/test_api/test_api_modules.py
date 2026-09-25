@@ -35,6 +35,62 @@ def test_auth_endpoint_returns_token_for_valid_credentials(client: TestClient) -
     assert payload["access_token"]
 
 
+def test_auth_me_returns_authenticated_user(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    response = client.get("/api/v1/auth/me", headers=auth_headers)
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["email"] == "admin@example.com"
+    assert payload["role"] == "owner"
+    assert payload["is_active"] is True
+
+
+def test_viewer_role_is_read_only(
+    client: TestClient,
+    auth_headers: dict[str, str],
+    viewer_auth_headers: dict[str, str],
+) -> None:
+    property_response = client.post(
+        "/api/v1/properties/",
+        headers=auth_headers,
+        json={
+            "name": "Viewer Test Objekt",
+            "property_type": "residential",
+            "street": "Viewerstraße 1",
+            "postal_code": "10115",
+            "city": "Berlin",
+            "purchase_price": 250000,
+        },
+    )
+    assert property_response.status_code == 201
+
+    read_response = client.get("/api/v1/properties/", headers=viewer_auth_headers)
+    assert read_response.status_code == 200
+    assert len(read_response.json()) == 1
+
+    create_response = client.post(
+        "/api/v1/properties/",
+        headers=viewer_auth_headers,
+        json={
+            "name": "Nicht erlaubt",
+            "property_type": "residential",
+            "street": "Viewerstraße 2",
+            "postal_code": "10115",
+            "city": "Berlin",
+            "purchase_price": 260000,
+        },
+    )
+    assert create_response.status_code == 403
+
+    import_response = client.post(
+        "/api/v1/banking/import-stub",
+        headers=viewer_auth_headers,
+    )
+    assert import_response.status_code == 403
+
+
 def test_properties_crud_flow(client: TestClient, auth_headers: dict[str, str]) -> None:
     create_response = client.post(
         "/api/v1/properties/",

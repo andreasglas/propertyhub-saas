@@ -15,6 +15,7 @@ import {
   Typography,
 } from "@mui/material";
 
+import { AppRoute } from "../appRoutes";
 import { useAuth } from "../context/AuthContext";
 import {
   AccountingEntry,
@@ -37,8 +38,12 @@ const defaultCredentials = {
   password: "test-password",
 };
 
-export function DashboardPage() {
-  const { isAuthenticated, login } = useAuth();
+type DashboardPageProps = {
+  currentRoute: AppRoute;
+};
+
+export function DashboardPage({ currentRoute }: DashboardPageProps) {
+  const { canManageData, currentUser, isAuthenticated, isLoadingUser, login } = useAuth();
   const [email, setEmail] = useState(defaultCredentials.email);
   const [password, setPassword] = useState(defaultCredentials.password);
   const [loginError, setLoginError] = useState<string | null>(null);
@@ -116,6 +121,24 @@ export function DashboardPage() {
     () => entries.reduce((sum, entry) => sum + entry.amount, 0),
     [entries],
   );
+  const pageTitles: Record<AppRoute, { title: string; subtitle: string }> = {
+    overview: {
+      title: "Immobilienverwaltung Dashboard",
+      subtitle: "Zentrale Übersicht über Kennzahlen, Immobilien und letzte Bewegungen.",
+    },
+    accounting: {
+      title: "Accounting",
+      subtitle: "Buchungssätze erfassen und die letzten Accounting Entries prüfen.",
+    },
+    billing: {
+      title: "Billing",
+      subtitle: "Rechnungen und Zahlungen verwalten.",
+    },
+    banking: {
+      title: "Banking",
+      subtitle: "Kontoereignisse importieren und Zahlungen zuordnen.",
+    },
+  };
 
   async function handleLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -271,6 +294,10 @@ export function DashboardPage() {
     );
   }
 
+  if (isLoadingUser || !currentUser) {
+    return <Alert severity="info">Benutzerprofil wird geladen...</Alert>;
+  }
+
   const kpis = [
     { label: "Immobilien", value: String(report?.properties_count ?? properties.length) },
     { label: "Rechnungen offen", value: String(report?.open_invoices_count ?? 0) },
@@ -281,448 +308,554 @@ export function DashboardPage() {
       value: `${(report?.total_expense_amount ?? totalAccountingAmount).toFixed(2)} €`,
     },
   ];
+  const pageTitle = pageTitles[currentRoute];
 
   return (
     <Stack spacing={3}>
       <div>
         <Typography variant="h4" gutterBottom>
-          Immobilienverwaltung Dashboard
+          {pageTitle.title}
         </Typography>
         <Typography color="text.secondary">
-          Erste integrierte Oberfläche für Login, Immobilien und Accounting Entries.
+          {pageTitle.subtitle}
         </Typography>
       </div>
 
       {loadError ? <Alert severity="error">{loadError}</Alert> : null}
       {loading ? <Alert severity="info">Daten werden geladen...</Alert> : null}
+      {!canManageData ? (
+        <Alert severity="info">
+          Deine Rolle ist aktuell read-only. Listen und Auswertungen bleiben sichtbar, Änderungen
+          sind gesperrt.
+        </Alert>
+      ) : null}
 
-      <Grid container spacing={2}>
-        {kpis.map((kpi) => (
-          <Grid key={kpi.label} item xs={12} sm={6} md={3}>
+      {currentRoute === "overview" ? (
+        <>
+          <Grid container spacing={2}>
+            {kpis.map((kpi) => (
+              <Grid key={kpi.label} item xs={12} sm={6} md={3}>
+                <Card>
+                  <CardContent>
+                    <Typography color="text.secondary" variant="body2">
+                      {kpi.label}
+                    </Typography>
+                    <Typography variant="h5" sx={{ mt: 1 }}>
+                      {kpi.value}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
+
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={6}>
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    Immobilien
+                  </Typography>
+                  <List dense>
+                    {properties.map((property) => (
+                      <ListItem key={property.id} disableGutters>
+                        <ListItemText
+                          primary={property.name}
+                          secondary={`${property.city ?? "-"} · ${property.property_type}`}
+                        />
+                      </ListItem>
+                    ))}
+                    {!properties.length ? (
+                      <Typography color="text.secondary">
+                        Noch keine Immobilien vorhanden.
+                      </Typography>
+                    ) : null}
+                  </List>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            <Grid item xs={12} md={6}>
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    Letzte Buchungssätze
+                  </Typography>
+                  <List dense>
+                    {entries.map((entry) => (
+                      <ListItem key={entry.id} disableGutters>
+                        <ListItemText
+                          primary={`${entry.entry_type} · ${entry.amount.toFixed(2)} €`}
+                          secondary={`${entry.category ?? "-"} · ${entry.booking_date ?? "-"}`}
+                        />
+                      </ListItem>
+                    ))}
+                    {!entries.length ? (
+                      <Typography color="text.secondary">
+                        Noch keine Accounting Entries vorhanden.
+                      </Typography>
+                    ) : null}
+                  </List>
+                </CardContent>
+              </Card>
+            </Grid>
+          </Grid>
+
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={6}>
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    Letzte Rechnungen
+                  </Typography>
+                  <List dense>
+                    {invoices.map((invoice) => (
+                      <ListItem key={invoice.id} disableGutters>
+                        <ListItemText
+                          primary={`${invoice.vendor_name} · ${invoice.gross_amount.toFixed(2)} €`}
+                          secondary={`${invoice.status} · ${invoice.invoice_date ?? "-"}`}
+                        />
+                      </ListItem>
+                    ))}
+                    {!invoices.length ? (
+                      <Typography color="text.secondary">
+                        Noch keine Rechnungen vorhanden.
+                      </Typography>
+                    ) : null}
+                  </List>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            <Grid item xs={12} md={6}>
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    Letzte Zahlungen
+                  </Typography>
+                  <List dense>
+                    {payments.map((payment) => (
+                      <ListItem key={payment.id} disableGutters>
+                        <ListItemText
+                          primary={`${payment.amount.toFixed(2)} €`}
+                          secondary={`${payment.reference ?? "-"} · ${payment.booking_date ?? "-"}`}
+                        />
+                      </ListItem>
+                    ))}
+                    {!payments.length ? (
+                      <Typography color="text.secondary">
+                        Noch keine Zahlungen vorhanden.
+                      </Typography>
+                    ) : null}
+                  </List>
+                </CardContent>
+              </Card>
+            </Grid>
+          </Grid>
+        </>
+      ) : null}
+
+      {currentRoute === "accounting" ? (
+        <Grid container spacing={2}>
+          {canManageData ? (
+            <Grid item xs={12} md={5}>
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    Accounting Entry anlegen
+                  </Typography>
+                  <Stack component="form" spacing={2} onSubmit={handleCreateEntry}>
+                    <TextField
+                      select
+                      label="Immobilie"
+                      value={entryForm.property_id}
+                      onChange={(event) =>
+                        setEntryForm((current) => ({
+                          ...current,
+                          property_id: event.target.value,
+                        }))
+                      }
+                    >
+                      <MenuItem value="">Ohne Immobilie</MenuItem>
+                      {properties.map((property) => (
+                        <MenuItem key={property.id} value={property.id}>
+                          {property.name}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                    <TextField
+                      select
+                      label="Typ"
+                      value={entryForm.entry_type}
+                      onChange={(event) =>
+                        setEntryForm((current) => ({
+                          ...current,
+                          entry_type: event.target.value,
+                        }))
+                      }
+                    >
+                      <MenuItem value="expense">Expense</MenuItem>
+                      <MenuItem value="income">Income</MenuItem>
+                    </TextField>
+                    <TextField
+                      label="Kategorie"
+                      value={entryForm.category}
+                      onChange={(event) =>
+                        setEntryForm((current) => ({
+                          ...current,
+                          category: event.target.value,
+                        }))
+                      }
+                    />
+                    <TextField
+                      label="Betrag"
+                      type="number"
+                      value={entryForm.amount}
+                      onChange={(event) =>
+                        setEntryForm((current) => ({
+                          ...current,
+                          amount: event.target.value,
+                        }))
+                      }
+                    />
+                    <TextField
+                      label="Buchungsdatum"
+                      type="date"
+                      value={entryForm.booking_date}
+                      onChange={(event) =>
+                        setEntryForm((current) => ({
+                          ...current,
+                          booking_date: event.target.value,
+                        }))
+                      }
+                      InputLabelProps={{ shrink: true }}
+                    />
+                    <Box>
+                      <Button type="submit" variant="contained">
+                        Entry speichern
+                      </Button>
+                    </Box>
+                  </Stack>
+                </CardContent>
+              </Card>
+            </Grid>
+          ) : null}
+          <Grid item xs={12} md={canManageData ? 7 : 12}>
             <Card>
               <CardContent>
-                <Typography color="text.secondary" variant="body2">
-                  {kpi.label}
+                <Typography variant="h6" gutterBottom>
+                  Letzte Buchungssätze
                 </Typography>
-                <Typography variant="h5" sx={{ mt: 1 }}>
-                  {kpi.value}
-                </Typography>
+                <List dense>
+                  {entries.map((entry) => (
+                    <ListItem key={entry.id} disableGutters>
+                      <ListItemText
+                        primary={`${entry.entry_type} · ${entry.amount.toFixed(2)} €`}
+                        secondary={`${entry.category ?? "-"} · ${entry.booking_date ?? "-"}`}
+                      />
+                    </ListItem>
+                  ))}
+                  {!entries.length ? (
+                    <Typography color="text.secondary">
+                      Noch keine Accounting Entries vorhanden.
+                    </Typography>
+                  ) : null}
+                </List>
               </CardContent>
             </Card>
           </Grid>
-        ))}
-      </Grid>
+        </Grid>
+      ) : null}
 
-      <Grid container spacing={2}>
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Immobilien
-              </Typography>
-              <List dense>
-                {properties.map((property) => (
-                  <ListItem key={property.id} disableGutters>
-                    <ListItemText
-                      primary={property.name}
-                      secondary={`${property.city ?? "-"} · ${property.property_type}`}
-                    />
-                  </ListItem>
-                ))}
-                {!properties.length ? (
-                  <Typography color="text.secondary">
-                    Noch keine Immobilien vorhanden.
+      {currentRoute === "billing" ? (
+        <>
+          {canManageData ? (
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={6}>
+                <Card>
+                  <CardContent>
+                    <Typography variant="h6" gutterBottom>
+                      Rechnung anlegen
+                    </Typography>
+                    <Stack component="form" spacing={2} onSubmit={handleCreateInvoice}>
+                      <TextField
+                        select
+                        label="Immobilie"
+                        value={invoiceForm.property_id}
+                        onChange={(event) =>
+                          setInvoiceForm((current) => ({
+                            ...current,
+                            property_id: event.target.value,
+                          }))
+                        }
+                      >
+                        <MenuItem value="">Ohne Immobilie</MenuItem>
+                        {properties.map((property) => (
+                          <MenuItem key={property.id} value={property.id}>
+                            {property.name}
+                          </MenuItem>
+                        ))}
+                      </TextField>
+                      <TextField
+                        label="Lieferant"
+                        value={invoiceForm.vendor_name}
+                        onChange={(event) =>
+                          setInvoiceForm((current) => ({
+                            ...current,
+                            vendor_name: event.target.value,
+                          }))
+                        }
+                      />
+                      <TextField
+                        label="Rechnungsnummer"
+                        value={invoiceForm.invoice_number}
+                        onChange={(event) =>
+                          setInvoiceForm((current) => ({
+                            ...current,
+                            invoice_number: event.target.value,
+                          }))
+                        }
+                      />
+                      <TextField
+                        label="Rechnungsdatum"
+                        type="date"
+                        value={invoiceForm.invoice_date}
+                        onChange={(event) =>
+                          setInvoiceForm((current) => ({
+                            ...current,
+                            invoice_date: event.target.value,
+                          }))
+                        }
+                        InputLabelProps={{ shrink: true }}
+                      />
+                      <TextField
+                        label="Betrag"
+                        type="number"
+                        value={invoiceForm.gross_amount}
+                        onChange={(event) =>
+                          setInvoiceForm((current) => ({
+                            ...current,
+                            gross_amount: event.target.value,
+                          }))
+                        }
+                      />
+                      <TextField
+                        select
+                        label="Status"
+                        value={invoiceForm.status}
+                        onChange={(event) =>
+                          setInvoiceForm((current) => ({
+                            ...current,
+                            status: event.target.value,
+                          }))
+                        }
+                      >
+                        <MenuItem value="draft">Draft</MenuItem>
+                        <MenuItem value="received">Received</MenuItem>
+                        <MenuItem value="approved">Approved</MenuItem>
+                        <MenuItem value="paid">Paid</MenuItem>
+                      </TextField>
+                      <Box>
+                        <Button type="submit" variant="contained">
+                          Rechnung speichern
+                        </Button>
+                      </Box>
+                    </Stack>
+                  </CardContent>
+                </Card>
+              </Grid>
+
+              <Grid item xs={12} md={6}>
+                <Card>
+                  <CardContent>
+                    <Typography variant="h6" gutterBottom>
+                      Zahlung anlegen
+                    </Typography>
+                    <Stack component="form" spacing={2} onSubmit={handleCreatePayment}>
+                      <TextField
+                        select
+                        label="Rechnung"
+                        value={paymentForm.invoice_id}
+                        onChange={(event) =>
+                          setPaymentForm((current) => ({
+                            ...current,
+                            invoice_id: event.target.value,
+                          }))
+                        }
+                      >
+                        {invoices.map((invoice) => (
+                          <MenuItem key={invoice.id} value={invoice.id}>
+                            {invoice.vendor_name} · {invoice.gross_amount.toFixed(2)} €
+                          </MenuItem>
+                        ))}
+                      </TextField>
+                      <TextField
+                        label="Betrag"
+                        type="number"
+                        value={paymentForm.amount}
+                        onChange={(event) =>
+                          setPaymentForm((current) => ({
+                            ...current,
+                            amount: event.target.value,
+                          }))
+                        }
+                      />
+                      <TextField
+                        label="Buchungsdatum"
+                        type="date"
+                        value={paymentForm.booking_date}
+                        onChange={(event) =>
+                          setPaymentForm((current) => ({
+                            ...current,
+                            booking_date: event.target.value,
+                          }))
+                        }
+                        InputLabelProps={{ shrink: true }}
+                      />
+                      <TextField
+                        label="Referenz"
+                        value={paymentForm.reference}
+                        onChange={(event) =>
+                          setPaymentForm((current) => ({
+                            ...current,
+                            reference: event.target.value,
+                          }))
+                        }
+                      />
+                      <Box>
+                        <Button type="submit" variant="contained">
+                          Zahlung speichern
+                        </Button>
+                      </Box>
+                    </Stack>
+                  </CardContent>
+                </Card>
+              </Grid>
+            </Grid>
+          ) : null}
+
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={6}>
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    Letzte Rechnungen
                   </Typography>
-                ) : null}
-              </List>
-            </CardContent>
-          </Card>
-        </Grid>
+                  <List dense>
+                    {invoices.map((invoice) => (
+                      <ListItem key={invoice.id} disableGutters>
+                        <ListItemText
+                          primary={`${invoice.vendor_name} · ${invoice.gross_amount.toFixed(2)} €`}
+                          secondary={`${invoice.status} · ${invoice.invoice_date ?? "-"}`}
+                        />
+                      </ListItem>
+                    ))}
+                    {!invoices.length ? (
+                      <Typography color="text.secondary">
+                        Noch keine Rechnungen vorhanden.
+                      </Typography>
+                    ) : null}
+                  </List>
+                </CardContent>
+              </Card>
+            </Grid>
 
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Accounting Entry anlegen
-              </Typography>
-              <Stack component="form" spacing={2} onSubmit={handleCreateEntry}>
-                <TextField
-                  select
-                  label="Immobilie"
-                  value={entryForm.property_id}
-                  onChange={(event) =>
-                    setEntryForm((current) => ({
-                      ...current,
-                      property_id: event.target.value,
-                    }))
-                  }
-                >
-                  <MenuItem value="">Ohne Immobilie</MenuItem>
-                  {properties.map((property) => (
-                    <MenuItem key={property.id} value={property.id}>
-                      {property.name}
-                    </MenuItem>
-                  ))}
-                </TextField>
-                <TextField
-                  select
-                  label="Typ"
-                  value={entryForm.entry_type}
-                  onChange={(event) =>
-                    setEntryForm((current) => ({
-                      ...current,
-                      entry_type: event.target.value,
-                    }))
-                  }
-                >
-                  <MenuItem value="expense">Expense</MenuItem>
-                  <MenuItem value="income">Income</MenuItem>
-                </TextField>
-                <TextField
-                  label="Kategorie"
-                  value={entryForm.category}
-                  onChange={(event) =>
-                    setEntryForm((current) => ({
-                      ...current,
-                      category: event.target.value,
-                    }))
-                  }
-                />
-                <TextField
-                  label="Betrag"
-                  type="number"
-                  value={entryForm.amount}
-                  onChange={(event) =>
-                    setEntryForm((current) => ({
-                      ...current,
-                      amount: event.target.value,
-                    }))
-                  }
-                />
-                <TextField
-                  label="Buchungsdatum"
-                  type="date"
-                  value={entryForm.booking_date}
-                  onChange={(event) =>
-                    setEntryForm((current) => ({
-                      ...current,
-                      booking_date: event.target.value,
-                    }))
-                  }
-                  InputLabelProps={{ shrink: true }}
-                />
-                <Box>
-                  <Button type="submit" variant="contained">
-                    Entry speichern
-                  </Button>
-                </Box>
-              </Stack>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
+            <Grid item xs={12} md={6}>
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    Letzte Zahlungen
+                  </Typography>
+                  <List dense>
+                    {payments.map((payment) => (
+                      <ListItem key={payment.id} disableGutters>
+                        <ListItemText
+                          primary={`${payment.amount.toFixed(2)} €`}
+                          secondary={`${payment.reference ?? "-"} · ${payment.booking_date ?? "-"}`}
+                        />
+                      </ListItem>
+                    ))}
+                    {!payments.length ? (
+                      <Typography color="text.secondary">
+                        Noch keine Zahlungen vorhanden.
+                      </Typography>
+                    ) : null}
+                  </List>
+                </CardContent>
+              </Card>
+            </Grid>
+          </Grid>
+        </>
+      ) : null}
 
-      <Grid container spacing={2}>
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Rechnung anlegen
-              </Typography>
-              <Stack component="form" spacing={2} onSubmit={handleCreateInvoice}>
-                <TextField
-                  select
-                  label="Immobilie"
-                  value={invoiceForm.property_id}
-                  onChange={(event) =>
-                    setInvoiceForm((current) => ({
-                      ...current,
-                      property_id: event.target.value,
-                    }))
-                  }
-                >
-                  <MenuItem value="">Ohne Immobilie</MenuItem>
-                  {properties.map((property) => (
-                    <MenuItem key={property.id} value={property.id}>
-                      {property.name}
-                    </MenuItem>
-                  ))}
-                </TextField>
-                <TextField
-                  label="Lieferant"
-                  value={invoiceForm.vendor_name}
-                  onChange={(event) =>
-                    setInvoiceForm((current) => ({
-                      ...current,
-                      vendor_name: event.target.value,
-                    }))
-                  }
-                />
-                <TextField
-                  label="Rechnungsnummer"
-                  value={invoiceForm.invoice_number}
-                  onChange={(event) =>
-                    setInvoiceForm((current) => ({
-                      ...current,
-                      invoice_number: event.target.value,
-                    }))
-                  }
-                />
-                <TextField
-                  label="Rechnungsdatum"
-                  type="date"
-                  value={invoiceForm.invoice_date}
-                  onChange={(event) =>
-                    setInvoiceForm((current) => ({
-                      ...current,
-                      invoice_date: event.target.value,
-                    }))
-                  }
-                  InputLabelProps={{ shrink: true }}
-                />
-                <TextField
-                  label="Betrag"
-                  type="number"
-                  value={invoiceForm.gross_amount}
-                  onChange={(event) =>
-                    setInvoiceForm((current) => ({
-                      ...current,
-                      gross_amount: event.target.value,
-                    }))
-                  }
-                />
-                <TextField
-                  select
-                  label="Status"
-                  value={invoiceForm.status}
-                  onChange={(event) =>
-                    setInvoiceForm((current) => ({
-                      ...current,
-                      status: event.target.value,
-                    }))
-                  }
-                >
-                  <MenuItem value="draft">Draft</MenuItem>
-                  <MenuItem value="received">Received</MenuItem>
-                  <MenuItem value="approved">Approved</MenuItem>
-                  <MenuItem value="paid">Paid</MenuItem>
-                </TextField>
-                <Box>
-                  <Button type="submit" variant="contained">
-                    Rechnung speichern
-                  </Button>
-                </Box>
-              </Stack>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Zahlung anlegen
-              </Typography>
-              <Stack component="form" spacing={2} onSubmit={handleCreatePayment}>
-                <TextField
-                  select
-                  label="Rechnung"
-                  value={paymentForm.invoice_id}
-                  onChange={(event) =>
-                    setPaymentForm((current) => ({
-                      ...current,
-                      invoice_id: event.target.value,
-                    }))
-                  }
-                >
-                  {invoices.map((invoice) => (
-                    <MenuItem key={invoice.id} value={invoice.id}>
-                      {invoice.vendor_name} · {invoice.gross_amount.toFixed(2)} €
-                    </MenuItem>
-                  ))}
-                </TextField>
-                <TextField
-                  label="Betrag"
-                  type="number"
-                  value={paymentForm.amount}
-                  onChange={(event) =>
-                    setPaymentForm((current) => ({
-                      ...current,
-                      amount: event.target.value,
-                    }))
-                  }
-                />
-                <TextField
-                  label="Buchungsdatum"
-                  type="date"
-                  value={paymentForm.booking_date}
-                  onChange={(event) =>
-                    setPaymentForm((current) => ({
-                      ...current,
-                      booking_date: event.target.value,
-                    }))
-                  }
-                  InputLabelProps={{ shrink: true }}
-                />
-                <TextField
-                  label="Referenz"
-                  value={paymentForm.reference}
-                  onChange={(event) =>
-                    setPaymentForm((current) => ({
-                      ...current,
-                      reference: event.target.value,
-                    }))
-                  }
-                />
-                <Box>
-                  <Button type="submit" variant="contained">
-                    Zahlung speichern
-                  </Button>
-                </Box>
-              </Stack>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
-
-      <Card>
-        <CardContent>
-          <Stack
-            direction={{ xs: "column", sm: "row" }}
-            justifyContent="space-between"
-            alignItems={{ xs: "flex-start", sm: "center" }}
-            spacing={2}
-            sx={{ mb: 2 }}
-          >
-            <div>
-              <Typography variant="h6" gutterBottom>
-                Banking & Matching
-              </Typography>
-              <Typography color="text.secondary">
-                Importiere Kontoereignisse und ordne sie vorhandenen Zahlungen zu.
-              </Typography>
-            </div>
-            <Button
-              variant="contained"
-              onClick={() => void handleImportBankTransactions()}
-              disabled={bankingActionLoading}
+      {currentRoute === "banking" ? (
+        <Card>
+          <CardContent>
+            <Stack
+              direction={{ xs: "column", sm: "row" }}
+              justifyContent="space-between"
+              alignItems={{ xs: "flex-start", sm: "center" }}
+              spacing={2}
+              sx={{ mb: 2 }}
             >
-              Import-Stub ausführen
-            </Button>
-          </Stack>
-          <List dense>
-            {bankTransactions.map((transaction) => (
-              <ListItem
-                key={transaction.id}
-                disableGutters
-                sx={{ alignItems: "flex-start", flexDirection: "column", gap: 1.5 }}
-              >
-                <ListItemText
-                  primary={`${transaction.amount.toFixed(2)} ${transaction.currency} · ${transaction.counterparty_name ?? transaction.account_name}`}
-                  secondary={`${transaction.reference ?? "-"} · ${transaction.booking_date ?? "-"} · Status: ${transaction.status}`}
-                />
-                <TextField
-                  select
-                  size="small"
-                  label="Mit Zahlung matchen"
-                  value={transaction.payment_id ?? ""}
-                  onChange={(event) =>
-                    void handleMatchBankTransaction(transaction.id, event.target.value)
-                  }
-                  sx={{ minWidth: 280 }}
+              <div>
+                <Typography variant="h6" gutterBottom>
+                  Banking & Matching
+                </Typography>
+                <Typography color="text.secondary">
+                  Importiere Kontoereignisse und ordne sie vorhandenen Zahlungen zu.
+                </Typography>
+              </div>
+              {canManageData ? (
+                <Button
+                  variant="contained"
+                  onClick={() => void handleImportBankTransactions()}
+                  disabled={bankingActionLoading}
                 >
-                  <MenuItem value="">Keine Auswahl</MenuItem>
-                  {payments.map((payment) => (
-                    <MenuItem key={payment.id} value={payment.id}>
-                      {payment.amount.toFixed(2)} € · {payment.reference ?? payment.id}
-                    </MenuItem>
-                  ))}
-                </TextField>
-              </ListItem>
-            ))}
-            {!bankTransactions.length ? (
-              <Typography color="text.secondary">
-                Noch keine Banktransaktionen vorhanden.
-              </Typography>
-            ) : null}
-          </List>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent>
-          <Typography variant="h6" gutterBottom>
-            Letzte Buchungssätze
-          </Typography>
-          <List dense>
-            {entries.map((entry) => (
-              <ListItem key={entry.id} disableGutters>
-                <ListItemText
-                  primary={`${entry.entry_type} · ${entry.amount.toFixed(2)} €`}
-                  secondary={`${entry.category ?? "-"} · ${entry.booking_date ?? "-"}`}
-                />
-              </ListItem>
-            ))}
-            {!entries.length ? (
-              <Typography color="text.secondary">
-                Noch keine Accounting Entries vorhanden.
-              </Typography>
-            ) : null}
-          </List>
-        </CardContent>
-      </Card>
-
-      <Grid container spacing={2}>
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Letzte Rechnungen
-              </Typography>
-              <List dense>
-                {invoices.map((invoice) => (
-                  <ListItem key={invoice.id} disableGutters>
-                    <ListItemText
-                      primary={`${invoice.vendor_name} · ${invoice.gross_amount.toFixed(2)} €`}
-                      secondary={`${invoice.status} · ${invoice.invoice_date ?? "-"}`}
-                    />
-                  </ListItem>
-                ))}
-                {!invoices.length ? (
-                  <Typography color="text.secondary">
-                    Noch keine Rechnungen vorhanden.
-                  </Typography>
-                ) : null}
-              </List>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Letzte Zahlungen
-              </Typography>
-              <List dense>
-                {payments.map((payment) => (
-                  <ListItem key={payment.id} disableGutters>
-                    <ListItemText
-                      primary={`${payment.amount.toFixed(2)} €`}
-                      secondary={`${payment.reference ?? "-"} · ${payment.booking_date ?? "-"}`}
-                    />
-                  </ListItem>
-                ))}
-                {!payments.length ? (
-                  <Typography color="text.secondary">
-                    Noch keine Zahlungen vorhanden.
-                  </Typography>
-                ) : null}
-              </List>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
+                  Import-Stub ausführen
+                </Button>
+              ) : null}
+            </Stack>
+            <List dense>
+              {bankTransactions.map((transaction) => (
+                <ListItem
+                  key={transaction.id}
+                  disableGutters
+                  sx={{ alignItems: "flex-start", flexDirection: "column", gap: 1.5 }}
+                >
+                  <ListItemText
+                    primary={`${transaction.amount.toFixed(2)} ${transaction.currency} · ${transaction.counterparty_name ?? transaction.account_name}`}
+                    secondary={`${transaction.reference ?? "-"} · ${transaction.booking_date ?? "-"} · Status: ${transaction.status}`}
+                  />
+                  <TextField
+                    select
+                    size="small"
+                    label="Mit Zahlung matchen"
+                    value={transaction.payment_id ?? ""}
+                    onChange={(event) =>
+                      void handleMatchBankTransaction(transaction.id, event.target.value)
+                    }
+                    sx={{ minWidth: 280 }}
+                    disabled={!canManageData || bankingActionLoading}
+                  >
+                    <MenuItem value="">Keine Auswahl</MenuItem>
+                    {payments.map((payment) => (
+                      <MenuItem key={payment.id} value={payment.id}>
+                        {payment.amount.toFixed(2)} € · {payment.reference ?? payment.id}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                </ListItem>
+              ))}
+              {!bankTransactions.length ? (
+                <Typography color="text.secondary">
+                  Noch keine Banktransaktionen vorhanden.
+                </Typography>
+              ) : null}
+            </List>
+          </CardContent>
+        </Card>
+      ) : null}
     </Stack>
   );
 }

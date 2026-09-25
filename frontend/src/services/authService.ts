@@ -5,6 +5,14 @@ type TokenResponse = {
   token_type: string;
 };
 
+export type AuthUser = {
+  id: string;
+  email: string;
+  full_name?: string | null;
+  role: string;
+  is_active: boolean;
+};
+
 export async function login(email: string, password: string) {
   const payload = new URLSearchParams();
   payload.set("username", email);
@@ -16,5 +24,10 @@ export async function login(email: string, password: string) {
     },
   });
 
+  return response.data;
+}
+
+export async function getCurrentUser() {
+  const response = await apiClient.get<AuthUser>("/auth/me");
   return response.data;
 }

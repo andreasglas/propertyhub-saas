@@ -31,6 +31,10 @@ Beispiel-Felder:
 
 Die Anmeldung validiert gegen Benutzer in der Datenbank. Für lokale Entwicklung kann ein initialer Admin über `BOOTSTRAP_ADMIN_*` beim Start angelegt werden.
 
+### `GET /api/v1/auth/me`
+
+Liefert den aktuell authentifizierten Benutzer inklusive Rolle für Frontend-Rechteprüfung und Navigation.
+
 ## Fachmodule
 
 Die folgenden Module sind als strukturierte Einstiegspunkte vorhanden:
@@ -80,6 +84,8 @@ Die folgenden Module sind als strukturierte Einstiegspunkte vorhanden:
 - `GET /api/v1/reports/`
 
 Der Reporting-Endpunkt liefert aktuell eine Dashboard-Zusammenfassung mit Zählern und Summen für Immobilien, Verträge, Rechnungen, Zahlungen und Accounting Entries.
+
+Schreiboperationen sind aktuell auf die Rollen `owner` und `manager` beschränkt; `viewer` bleibt read-only.
 
 Alle Antworten liefern im Initial-Setup einen statusorientierten Payload, damit die Endpunkte früh integrierbar sind und später schrittweise mit Geschäftslogik hinterlegt werden können.
 

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.orm import Session
 
-from app.core.dependencies import get_current_user
+from app.core.dependencies import get_current_user, require_roles
 from app.db.models.user import User
 from app.db.session import get_db
 from app.schemas.banking import (
@@ -30,7 +30,7 @@ async def list_transactions(
 )
 async def create_transaction(
     payload: BankTransactionCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles("owner", "manager")),
     db: Session = Depends(get_db),
 ) -> BankTransactionRead:
     return service.create_transaction(db, current_user.organization_id, payload)
@@ -49,7 +49,7 @@ async def get_transaction(
 async def update_transaction(
     transaction_id: str,
     payload: BankTransactionUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles("owner", "manager")),
     db: Session = Depends(get_db),
 ) -> BankTransactionRead:
     return service.update_transaction(
@@ -60,7 +60,7 @@ async def update_transaction(
 @router.delete("/transactions/{transaction_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_transaction(
     transaction_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles("owner", "manager")),
     db: Session = Depends(get_db),
 ) -> Response:
     service.delete_transaction(db, current_user.organization_id, transaction_id)
@@ -74,7 +74,7 @@ async def delete_transaction(
 async def match_payment(
     transaction_id: str,
     payload: BankTransactionMatchRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles("owner", "manager")),
     db: Session = Depends(get_db),
 ) -> BankTransactionRead:
     return service.match_payment(db, current_user.organization_id, transaction_id, payload)
@@ -82,7 +82,7 @@ async def match_payment(
 
 @router.post("/import-stub", response_model=BankImportResult)
 async def import_stub_transactions(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles("owner", "manager")),
     db: Session = Depends(get_db),
 ) -> BankImportResult:
     transactions = service.import_stub_transactions(db, current_user.organization_id)

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.orm import Session
 
-from app.core.dependencies import get_current_user
+from app.core.dependencies import get_current_user, require_roles
 from app.db.models.user import User
 from app.db.session import get_db
 from app.schemas.tenant import TenantCreate, TenantRead, TenantUpdate
@@ -22,7 +22,7 @@ async def list_tenants(
 @router.post("/", response_model=TenantRead, status_code=status.HTTP_201_CREATED)
 async def create_tenant(
     payload: TenantCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles("owner", "manager")),
     db: Session = Depends(get_db),
 ) -> TenantRead:
     return service.create_tenant(db, current_user.organization_id, payload)
@@ -41,7 +41,7 @@ async def get_tenant(
 async def update_tenant(
     tenant_id: str,
     payload: TenantUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles("owner", "manager")),
     db: Session = Depends(get_db),
 ) -> TenantRead:
     return service.update_tenant(db, current_user.organization_id, tenant_id, payload)
@@ -50,7 +50,7 @@ async def update_tenant(
 @router.delete("/{tenant_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_tenant(
     tenant_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles("owner", "manager")),
     db: Session = Depends(get_db),
 ) -> Response:
     service.delete_tenant(db, current_user.organization_id, tenant_id)

@@ -4,16 +4,30 @@ import {
   AppBar,
   Box,
   Button,
+  Chip,
   Container,
   Stack,
   Toolbar,
   Typography,
 } from "@mui/material";
 
+import { AppRoute } from "../appRoutes";
 import { useAuth } from "../context/AuthContext";
 
-export function AppShell({ children }: PropsWithChildren) {
-  const { isAuthenticated, logout } = useAuth();
+const navigationItems: Array<{ route: AppRoute; label: string }> = [
+  { route: "overview", label: "Übersicht" },
+  { route: "accounting", label: "Accounting" },
+  { route: "billing", label: "Billing" },
+  { route: "banking", label: "Banking" },
+];
+
+type AppShellProps = PropsWithChildren<{
+  currentRoute: AppRoute;
+  onNavigate: (route: AppRoute) => void;
+}>;
+
+export function AppShell({ children, currentRoute, onNavigate }: AppShellProps) {
+  const { currentUser, isAuthenticated, logout } = useAuth();
 
   return (
     <Box sx={{ bgcolor: "background.default", minHeight: "100vh" }}>
@@ -34,9 +48,33 @@ export function AppShell({ children }: PropsWithChildren) {
             </Stack>
 
             {isAuthenticated ? (
-              <Button color="inherit" onClick={logout}>
-                Logout
-              </Button>
+              <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                {navigationItems.map((item) => (
+                  <Button
+                    key={item.route}
+                    color="inherit"
+                    variant={currentRoute === item.route ? "outlined" : "text"}
+                    onClick={() => onNavigate(item.route)}
+                    sx={{
+                      borderColor:
+                        currentRoute === item.route ? "rgba(255,255,255,0.4)" : undefined,
+                    }}
+                  >
+                    {item.label}
+                  </Button>
+                ))}
+                {currentUser ? (
+                  <Chip
+                    label={`Rolle: ${currentUser.role}`}
+                    color="default"
+                    size="small"
+                    sx={{ bgcolor: "rgba(255,255,255,0.16)", color: "white" }}
+                  />
+                ) : null}
+                <Button color="inherit" onClick={logout}>
+                  Logout
+                </Button>
+              </Stack>
             ) : null}
           </Stack>
         </Toolbar>

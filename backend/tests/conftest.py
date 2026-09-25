@@ -43,3 +43,31 @@ def auth_headers(client: TestClient) -> dict[str, str]:
     )
     token = response.json()["access_token"]
     return {"Authorization": "Bearer " + token}
+
+
+@pytest.fixture
+def viewer_auth_headers(client: TestClient) -> dict[str, str]:
+    with SessionLocal() as db:
+        viewer = UserService().get_user_by_email(db, "viewer@example.com")
+        if viewer is None:
+            from app.core.security import get_password_hash
+            from app.db.models.user import User
+
+            db.add(
+                User(
+                    organization_id="00000000-0000-0000-0000-000000000001",
+                    email="viewer@example.com",
+                    full_name="Viewer User",
+                    hashed_password=get_password_hash("viewer-password"),
+                    role="viewer",
+                    is_active=True,
+                )
+            )
+            db.commit()
+
+    response = client.post(
+        "/api/v1/auth/token",
+        data={"username": "viewer@example.com", "password": "viewer-password"},
+    )
+    token = response.json()["access_token"]
+    return {"Authorization": "Bearer " + token}
