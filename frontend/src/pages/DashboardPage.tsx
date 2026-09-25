@@ -21,6 +21,12 @@ import {
   createAccountingEntry,
   listAccountingEntries,
 } from "../services/accountingService";
+import {
+  BankTransaction,
+  importBankTransactions,
+  listBankTransactions,
+  matchBankTransaction,
+} from "../services/bankingService";
 import { createInvoice, Invoice, listInvoices } from "../services/invoiceService";
 import { createPayment, listPayments, Payment } from "../services/paymentService";
 import { Property, listProperties } from "../services/propertyService";
@@ -41,8 +47,10 @@ export function DashboardPage() {
   const [entries, setEntries] = useState<AccountingEntry[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [bankTransactions, setBankTransactions] = useState<BankTransaction[]>([]);
   const [report, setReport] = useState<DashboardReport | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [bankingActionLoading, setBankingActionLoading] = useState(false);
   const [entryForm, setEntryForm] = useState({
     property_id: "",
     entry_type: "expense",
@@ -74,18 +82,21 @@ export function DashboardPage() {
         loadedEntries,
         loadedInvoices,
         loadedPayments,
+        loadedBankTransactions,
         loadedReport,
       ] = await Promise.all([
         listProperties(),
         listAccountingEntries(),
         listInvoices(),
         listPayments(),
+        listBankTransactions(),
         getDashboardReport(),
       ]);
       setProperties(loadedProperties);
       setEntries(loadedEntries);
       setInvoices(loadedInvoices);
       setPayments(loadedPayments);
+      setBankTransactions(loadedBankTransactions);
       setReport(loadedReport);
     } catch {
       setLoadError("Daten konnten nicht geladen werden.");
@@ -186,6 +197,37 @@ export function DashboardPage() {
     }
   }
 
+  async function handleImportBankTransactions() {
+    setBankingActionLoading(true);
+    try {
+      await importBankTransactions();
+      await loadDashboardData();
+    } catch {
+      setLoadError("Banktransaktionen konnten nicht importiert werden.");
+    } finally {
+      setBankingActionLoading(false);
+    }
+  }
+
+  async function handleMatchBankTransaction(
+    transactionId: string,
+    paymentId: string,
+  ) {
+    if (!paymentId) {
+      return;
+    }
+
+    setBankingActionLoading(true);
+    try {
+      await matchBankTransaction(transactionId, paymentId);
+      await loadDashboardData();
+    } catch {
+      setLoadError("Banktransaktion konnte nicht gematcht werden.");
+    } finally {
+      setBankingActionLoading(false);
+    }
+  }
+
   if (!isAuthenticated) {
     return (
       <Stack spacing={3}>
@@ -233,6 +275,7 @@ export function DashboardPage() {
     { label: "Immobilien", value: String(report?.properties_count ?? properties.length) },
     { label: "Rechnungen offen", value: String(report?.open_invoices_count ?? 0) },
     { label: "Zahlungen", value: String(report?.payments_count ?? payments.length) },
+    { label: "Banktransaktionen", value: String(bankTransactions.length) },
     {
       label: "Accounting Gesamt",
       value: `${(report?.total_expense_amount ?? totalAccountingAmount).toFixed(2)} €`,
@@ -541,6 +584,70 @@ export function DashboardPage() {
           </Card>
         </Grid>
       </Grid>
+
+      <Card>
+        <CardContent>
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            justifyContent="space-between"
+            alignItems={{ xs: "flex-start", sm: "center" }}
+            spacing={2}
+            sx={{ mb: 2 }}
+          >
+            <div>
+              <Typography variant="h6" gutterBottom>
+                Banking & Matching
+              </Typography>
+              <Typography color="text.secondary">
+                Importiere Kontoereignisse und ordne sie vorhandenen Zahlungen zu.
+              </Typography>
+            </div>
+            <Button
+              variant="contained"
+              onClick={() => void handleImportBankTransactions()}
+              disabled={bankingActionLoading}
+            >
+              Import-Stub ausführen
+            </Button>
+          </Stack>
+          <List dense>
+            {bankTransactions.map((transaction) => (
+              <ListItem
+                key={transaction.id}
+                disableGutters
+                sx={{ alignItems: "flex-start", flexDirection: "column", gap: 1.5 }}
+              >
+                <ListItemText
+                  primary={`${transaction.amount.toFixed(2)} ${transaction.currency} · ${transaction.counterparty_name ?? transaction.account_name}`}
+                  secondary={`${transaction.reference ?? "-"} · ${transaction.booking_date ?? "-"} · Status: ${transaction.status}`}
+                />
+                <TextField
+                  select
+                  size="small"
+                  label="Mit Zahlung matchen"
+                  value={transaction.payment_id ?? ""}
+                  onChange={(event) =>
+                    void handleMatchBankTransaction(transaction.id, event.target.value)
+                  }
+                  sx={{ minWidth: 280 }}
+                >
+                  <MenuItem value="">Keine Auswahl</MenuItem>
+                  {payments.map((payment) => (
+                    <MenuItem key={payment.id} value={payment.id}>
+                      {payment.amount.toFixed(2)} € · {payment.reference ?? payment.id}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              </ListItem>
+            ))}
+            {!bankTransactions.length ? (
+              <Typography color="text.secondary">
+                Noch keine Banktransaktionen vorhanden.
+              </Typography>
+            ) : null}
+          </List>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardContent>

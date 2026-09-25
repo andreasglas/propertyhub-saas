@@ -6,7 +6,11 @@ from sqlalchemy.orm import Session
 from app.core.exceptions import PropertyHubError
 from app.db.models.bank_transaction import BankTransaction
 from app.db.models.payment import Payment
-from app.schemas.banking import BankTransactionCreate, BankTransactionUpdate
+from app.schemas.banking import (
+    BankTransactionCreate,
+    BankTransactionMatchRequest,
+    BankTransactionUpdate,
+)
 
 
 class BankingService:
@@ -82,6 +86,22 @@ class BankingService:
         transaction = self.get_transaction(db, organization_id, transaction_id)
         db.delete(transaction)
         db.commit()
+
+    def match_payment(
+        self,
+        db: Session,
+        organization_id: str,
+        transaction_id: str,
+        payload: BankTransactionMatchRequest,
+    ) -> BankTransaction:
+        payment = self._ensure_payment(db, organization_id, payload.payment_id)
+        transaction = self.get_transaction(db, organization_id, transaction_id)
+        transaction.payment_id = payment.id
+        transaction.status = "matched"
+        db.add(transaction)
+        db.commit()
+        db.refresh(transaction)
+        return transaction
 
     def import_stub_transactions(
         self, db: Session, organization_id: str

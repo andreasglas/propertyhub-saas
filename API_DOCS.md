@@ -70,6 +70,7 @@ Die folgenden Module sind als strukturierte Einstiegspunkte vorhanden:
 - `GET /api/v1/banking/transactions/{transaction_id}`
 - `PUT /api/v1/banking/transactions/{transaction_id}`
 - `DELETE /api/v1/banking/transactions/{transaction_id}`
+- `POST /api/v1/banking/transactions/{transaction_id}/match-payment`
 - `POST /api/v1/banking/import-stub`
 - `GET /api/v1/accounting/`
 - `POST /api/v1/accounting/`

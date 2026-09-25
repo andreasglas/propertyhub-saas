@@ -1340,3 +1340,99 @@ def test_banking_transactions_are_scoped_to_authenticated_organization(
         f"/api/v1/banking/transactions/{transaction_id}", headers=other_headers
     )
     assert detail_response.status_code == 404
+
+
+def test_banking_transaction_can_be_matched_to_payment(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    tenant_response = client.post(
+        "/api/v1/tenants/",
+        headers=auth_headers,
+        json={
+            "first_name": "Bank",
+            "last_name": "Matcher",
+            "email": "bank-matcher@example.com",
+            "phone": "+49111111111",
+            "move_in_date": "2026-01-01",
+            "move_out_date": None,
+        },
+    )
+    property_response = client.post(
+        "/api/v1/properties/",
+        headers=auth_headers,
+        json={
+            "name": "Matching Haus",
+            "property_type": "residential",
+            "street": "Abgleich 1",
+            "postal_code": "10115",
+            "city": "Berlin",
+            "purchase_price": 600000,
+        },
+    )
+    unit_response = client.post(
+        "/api/v1/units/",
+        headers=auth_headers,
+        json={
+            "property_id": property_response.json()["id"],
+            "name": "Wohnung A",
+            "unit_type": "apartment",
+            "status": "occupied",
+            "area_sqm": 65,
+        },
+    )
+    contract_response = client.post(
+        "/api/v1/contracts/",
+        headers=auth_headers,
+        json={
+            "unit_id": unit_response.json()["id"],
+            "tenant_id": tenant_response.json()["id"],
+            "start_date": "2026-01-01",
+            "end_date": None,
+            "cold_rent": 950,
+            "service_charge_advance": 180,
+        },
+    )
+    assert contract_response.status_code == 201
+    payment_response = client.post(
+        "/api/v1/payments/",
+        headers=auth_headers,
+        json={
+            "invoice_id": None,
+            "contract_id": contract_response.json()["id"],
+            "amount": 950,
+            "booking_date": "2026-08-05",
+            "reference": "Miete August",
+        },
+    )
+    assert payment_response.status_code == 201
+
+    transaction_response = client.post(
+        "/api/v1/banking/transactions",
+        headers=auth_headers,
+        json={
+            "payment_id": None,
+            "external_id": "match-001",
+            "account_name": "Geschäftskonto",
+            "transaction_type": "credit",
+            "booking_date": "2026-08-05",
+            "value_date": "2026-08-05",
+            "amount": 950,
+            "currency": "EUR",
+            "counterparty_name": "Bank Matcher",
+            "iban": "DE44500105175407324931",
+            "reference": "Miete August",
+            "status": "imported",
+        },
+    )
+    assert transaction_response.status_code == 201
+    transaction_id = transaction_response.json()["id"]
+
+    match_response = client.post(
+        f"/api/v1/banking/transactions/{transaction_id}/match-payment",
+        headers=auth_headers,
+        json={"payment_id": payment_response.json()["id"]},
+    )
+    assert match_response.status_code == 200
+    matched_transaction = match_response.json()
+    assert matched_transaction["payment_id"] == payment_response.json()["id"]
+    assert matched_transaction["status"] == "matched"

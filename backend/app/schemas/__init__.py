@@ -6,6 +6,7 @@ from app.schemas.accounting import (
 from app.schemas.banking import (
     BankImportResult,
     BankTransactionCreate,
+    BankTransactionMatchRequest,
     BankTransactionRead,
     BankTransactionUpdate,
 )
@@ -27,6 +28,7 @@ __all__ = [
     "AccountingEntryUpdate",
     "BankImportResult",
     "BankTransactionCreate",
+    "BankTransactionMatchRequest",
     "BankTransactionRead",
     "BankTransactionUpdate",
     "InvoiceCreate",

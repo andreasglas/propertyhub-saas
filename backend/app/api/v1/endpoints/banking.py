@@ -7,6 +7,7 @@ from app.db.session import get_db
 from app.schemas.banking import (
     BankImportResult,
     BankTransactionCreate,
+    BankTransactionMatchRequest,
     BankTransactionRead,
     BankTransactionUpdate,
 )
@@ -64,6 +65,19 @@ async def delete_transaction(
 ) -> Response:
     service.delete_transaction(db, current_user.organization_id, transaction_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post(
+    "/transactions/{transaction_id}/match-payment",
+    response_model=BankTransactionRead,
+)
+async def match_payment(
+    transaction_id: str,
+    payload: BankTransactionMatchRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> BankTransactionRead:
+    return service.match_payment(db, current_user.organization_id, transaction_id, payload)
 
 
 @router.post("/import-stub", response_model=BankImportResult)

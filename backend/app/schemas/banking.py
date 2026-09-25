@@ -33,6 +33,10 @@ class BankTransactionRead(BankTransactionBase):
     model_config = {"from_attributes": True}
 
 
+class BankTransactionMatchRequest(BaseModel):
+    payment_id: str
+
+
 class BankImportResult(BaseModel):
     imported_count: int
     transactions: list[BankTransactionRead]
