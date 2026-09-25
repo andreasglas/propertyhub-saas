@@ -67,6 +67,10 @@ Die folgenden Module sind als strukturierte Einstiegspunkte vorhanden:
 - `DELETE /api/v1/payments/{payment_id}`
 - `GET /api/v1/banking/`
 - `GET /api/v1/accounting/`
+- `POST /api/v1/accounting/`
+- `GET /api/v1/accounting/{entry_id}`
+- `PUT /api/v1/accounting/{entry_id}`
+- `DELETE /api/v1/accounting/{entry_id}`
 - `GET /api/v1/reports/`
 
 Alle Antworten liefern im Initial-Setup einen statusorientierten Payload, damit die Endpunkte früh integrierbar sind und später schrittweise mit Geschäftslogik hinterlegt werden können.

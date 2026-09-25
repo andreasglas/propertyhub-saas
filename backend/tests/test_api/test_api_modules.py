@@ -889,3 +889,156 @@ def test_payments_are_scoped_to_authenticated_organization(
         f"/api/v1/payments/{payment_id}", headers=other_headers
     )
     assert detail_response.status_code == 404
+
+
+def test_accounting_entries_crud_flow(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    property_response = client.post(
+        "/api/v1/properties/",
+        headers=auth_headers,
+        json={
+            "name": "Accounting Haus",
+            "property_type": "residential",
+            "street": "Buchungsgasse 7",
+            "postal_code": "70173",
+            "city": "Stuttgart",
+            "purchase_price": 730000,
+        },
+    )
+    property_id = property_response.json()["id"]
+
+    create_response = client.post(
+        "/api/v1/accounting/",
+        headers=auth_headers,
+        json={
+            "property_id": property_id,
+            "entry_type": "expense",
+            "category": "insurance",
+            "amount": 210.75,
+            "booking_date": "2026-10-01",
+        },
+    )
+    assert create_response.status_code == 201
+    created = create_response.json()
+    entry_id = created["id"]
+    assert created["entry_type"] == "expense"
+
+    list_response = client.get("/api/v1/accounting/", headers=auth_headers)
+    assert list_response.status_code == 200
+    assert len(list_response.json()) == 1
+
+    get_response = client.get(
+        f"/api/v1/accounting/{entry_id}", headers=auth_headers
+    )
+    assert get_response.status_code == 200
+    assert get_response.json()["amount"] == 210.75
+
+    update_response = client.put(
+        f"/api/v1/accounting/{entry_id}",
+        headers=auth_headers,
+        json={
+            "property_id": property_id,
+            "entry_type": "expense",
+            "category": "maintenance",
+            "amount": 245.0,
+            "booking_date": "2026-10-02",
+        },
+    )
+    assert update_response.status_code == 200
+    assert update_response.json()["category"] == "maintenance"
+
+    delete_response = client.delete(
+        f"/api/v1/accounting/{entry_id}", headers=auth_headers
+    )
+    assert delete_response.status_code == 204
+
+
+def test_accounting_entry_requires_property_in_same_organization(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    with SessionLocal() as db:
+        foreign_property = Property(
+            organization_id="00000000-0000-0000-0000-000000000099",
+            name="Fremdes Buchungsobjekt",
+            property_type="residential",
+            street="Extern 15",
+            postal_code="99999",
+            city="Extern",
+        )
+        db.add(foreign_property)
+        db.commit()
+        db.refresh(foreign_property)
+        foreign_property_id = foreign_property.id
+
+    response = client.post(
+        "/api/v1/accounting/",
+        headers=auth_headers,
+        json={
+            "property_id": foreign_property_id,
+            "entry_type": "expense",
+            "category": "tax",
+            "amount": 100,
+            "booking_date": "2026-10-03",
+        },
+    )
+    assert response.status_code == 404
+
+
+def test_accounting_entries_are_scoped_to_authenticated_organization(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    property_response = client.post(
+        "/api/v1/properties/",
+        headers=auth_headers,
+        json={
+            "name": "Scoped Accounting Haus",
+            "property_type": "residential",
+            "street": "Scope Buchung 3",
+            "postal_code": "01067",
+            "city": "Dresden",
+            "purchase_price": 510000,
+        },
+    )
+    create_response = client.post(
+        "/api/v1/accounting/",
+        headers=auth_headers,
+        json={
+            "property_id": property_response.json()["id"],
+            "entry_type": "income",
+            "category": "rent",
+            "amount": 1300,
+            "booking_date": "2026-10-04",
+        },
+    )
+    entry_id = create_response.json()["id"]
+
+    with SessionLocal() as db:
+        db.add(
+            User(
+                organization_id="00000000-0000-0000-0000-000000000099",
+                email="accounting-scope@example.com",
+                full_name="Accounting Scope User",
+                hashed_password=get_password_hash("scope-password"),
+                role="owner",
+                is_active=True,
+            )
+        )
+        db.commit()
+
+    login_response = client.post(
+        "/api/v1/auth/token",
+        data={"username": "accounting-scope@example.com", "password": "scope-password"},
+    )
+    other_headers = {
+        "Authorization": "Bearer " + login_response.json()["access_token"]
+    }
+
+    list_response = client.get("/api/v1/accounting/", headers=other_headers)
+    assert list_response.status_code == 200
+    assert list_response.json() == []
+
+    detail_response = client.get(
+        f"/api/v1/accounting/{entry_id}", headers=other_headers
+    )
+    assert detail_response.status_code == 404

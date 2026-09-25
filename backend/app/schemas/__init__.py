@@ -1,3 +1,8 @@
+from app.schemas.accounting import (
+    AccountingEntryCreate,
+    AccountingEntryRead,
+    AccountingEntryUpdate,
+)
 from app.schemas.contract import ContractCreate, ContractRead, ContractUpdate
 from app.schemas.invoice import InvoiceCreate, InvoiceRead, InvoiceUpdate
 from app.schemas.payment import PaymentCreate, PaymentRead, PaymentUpdate
@@ -10,6 +15,9 @@ __all__ = [
     "ContractCreate",
     "ContractRead",
     "ContractUpdate",
+    "AccountingEntryCreate",
+    "AccountingEntryRead",
+    "AccountingEntryUpdate",
     "InvoiceCreate",
     "InvoiceRead",
     "InvoiceUpdate",
