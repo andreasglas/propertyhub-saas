@@ -16,6 +16,10 @@ import { useAuth } from "../context/AuthContext";
 
 const navigationItems: Array<{ route: AppRoute; label: string }> = [
   { route: "overview", label: "Übersicht" },
+  { route: "properties", label: "Immobilien" },
+  { route: "units", label: "Einheiten" },
+  { route: "tenants", label: "Mieter" },
+  { route: "contracts", label: "Verträge" },
   { route: "accounting", label: "Accounting" },
   { route: "billing", label: "Billing" },
   { route: "banking", label: "Banking" },

@@ -1,7 +1,20 @@
-export type AppRoute = "overview" | "accounting" | "billing" | "banking" | "documents";
+export type AppRoute =
+  | "overview"
+  | "properties"
+  | "units"
+  | "tenants"
+  | "contracts"
+  | "accounting"
+  | "billing"
+  | "banking"
+  | "documents";
 
 export const appRoutePaths: Record<AppRoute, string> = {
   overview: "/",
+  properties: "/properties",
+  units: "/units",
+  tenants: "/tenants",
+  contracts: "/contracts",
   accounting: "/accounting",
   billing: "/billing",
   banking: "/banking",
