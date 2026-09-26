@@ -67,6 +67,7 @@ Das Frontend nutzt im Development standardmäßig den relativen Pfad `/api`; lok
 - Zentrale API-Client-Abstraktion im Frontend
 - erster Dokumenten- und OCR-Testpfad für Rechnungsbelege
 - nutzbare Frontend-Bereiche für Immobilien, Einheiten, Mieter, Verträge, Billing, Banking und Dokumente
+- Admin-Bereiche für Organisationsdaten und Benutzerverwaltung mit Rollensteuerung
 - standardisierte Suche-, Filter- und Pagination-Muster für operative Listen im Dashboard
 
 ## Weiterführende Dokumentation

@@ -7,15 +7,19 @@ from app.api.v1.endpoints import (
     contracts,
     documents,
     invoices,
+    organization,
     payments,
     properties,
     reports,
     tenants,
     units,
+    users,
 )
 
 api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
+api_router.include_router(organization.router, prefix="/organization", tags=["organization"])
+api_router.include_router(users.router, prefix="/users", tags=["users"])
 api_router.include_router(properties.router, prefix="/properties", tags=["properties"])
 api_router.include_router(tenants.router, prefix="/tenants", tags=["tenants"])
 api_router.include_router(units.router, prefix="/units", tags=["units"])

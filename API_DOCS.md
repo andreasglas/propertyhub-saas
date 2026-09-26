@@ -35,6 +35,30 @@ Die Anmeldung validiert gegen Benutzer in der Datenbank. Für lokale Entwicklung
 
 Liefert den aktuell authentifizierten Benutzer inklusive Rolle für Frontend-Rechteprüfung und Navigation.
 
+## Organisation
+
+### `GET /api/v1/organization/me`
+
+Liefert die aktuelle Organisation des eingeloggten Benutzers.
+
+### `PUT /api/v1/organization/me`
+
+Aktualisiert Organisationsdaten wie Name, Adresse und Kontaktdaten. Nur `owner`.
+
+## Benutzerverwaltung
+
+### `GET /api/v1/users/`
+
+Listet alle Benutzer der aktuellen Organisation. Sichtbar für `owner` und `manager`.
+
+### `POST /api/v1/users/`
+
+Legt einen neuen Benutzer in der aktuellen Organisation an. Nur `owner`.
+
+### `PUT /api/v1/users/{user_id}`
+
+Aktualisiert Rolle, Aktivstatus, Name und optional Passwort eines Benutzers. Nur `owner`.
+
 ## Fachmodule
 
 Die folgenden Module sind als strukturierte Einstiegspunkte vorhanden:

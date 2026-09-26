@@ -43,6 +43,11 @@ import {
   uploadDocument,
 } from "../services/documentService";
 import { createInvoice, Invoice, listInvoices } from "../services/invoiceService";
+import {
+  getCurrentOrganization,
+  Organization,
+  updateCurrentOrganization,
+} from "../services/organizationService";
 import { createPayment, listPayments, Payment } from "../services/paymentService";
 import {
   createProperty,
@@ -60,6 +65,12 @@ import {
   createUnit,
   listUnits,
 } from "../services/unitService";
+import {
+  createUser,
+  listUsers,
+  ManagedUser,
+  updateUser,
+} from "../services/userAdminService";
 
 const defaultCredentials = {
   email: "admin@example.com",
@@ -278,6 +289,8 @@ function ManagedListCard<T>({
 
 export function DashboardPage({ currentRoute }: DashboardPageProps) {
   const { canManageData, currentUser, isAuthenticated, isLoadingUser, login } = useAuth();
+  const canManageUsers = currentUser?.role === "owner";
+  const canViewUsers = currentUser?.role === "owner" || currentUser?.role === "manager";
 
   const [email, setEmail] = useState(defaultCredentials.email);
   const [password, setPassword] = useState(defaultCredentials.password);
@@ -286,6 +299,8 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [properties, setProperties] = useState<Property[]>([]);
+  const [organization, setOrganization] = useState<Organization | null>(null);
+  const [users, setUsers] = useState<ManagedUser[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [contracts, setContracts] = useState<Contract[]>([]);
@@ -357,7 +372,26 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
     related_id: "",
     document_type: "invoice_receipt",
   });
+  const [organizationForm, setOrganizationForm] = useState({
+    name: "",
+    legal_name: "",
+    street: "",
+    postal_code: "",
+    city: "",
+    country: "Deutschland",
+    contact_email: "",
+    contact_phone: "",
+  });
+  const [userForm, setUserForm] = useState({
+    selected_user_id: "",
+    email: "",
+    full_name: "",
+    password: "",
+    role: "viewer",
+    is_active: "true",
+  });
 
+  const [userList, setUserList] = useState<ListControls>(defaultListControls);
   const [propertyList, setPropertyList] = useState<ListControls>(defaultListControls);
   const [unitList, setUnitList] = useState<UnitListControls>({
     ...defaultListControls,
@@ -390,6 +424,8 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
     setLoadError(null);
     try {
       const [
+        loadedOrganization,
+        loadedUsers,
         loadedProperties,
         loadedUnits,
         loadedTenants,
@@ -401,6 +437,8 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
         loadedDocuments,
         loadedReport,
       ] = await Promise.all([
+        getCurrentOrganization(),
+        canViewUsers ? listUsers() : Promise.resolve([]),
         listProperties(),
         listUnits(),
         listTenants(),
@@ -413,6 +451,18 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
         getDashboardReport(),
       ]);
 
+      setOrganization(loadedOrganization);
+      setOrganizationForm({
+        name: loadedOrganization.name,
+        legal_name: loadedOrganization.legal_name ?? "",
+        street: loadedOrganization.street ?? "",
+        postal_code: loadedOrganization.postal_code ?? "",
+        city: loadedOrganization.city ?? "",
+        country: loadedOrganization.country,
+        contact_email: loadedOrganization.contact_email ?? "",
+        contact_phone: loadedOrganization.contact_phone ?? "",
+      });
+      setUsers(loadedUsers);
       setProperties(loadedProperties);
       setUnits(loadedUnits);
       setTenants(loadedTenants);
@@ -428,6 +478,74 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleUpdateOrganization(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    try {
+      const updatedOrganization = await updateCurrentOrganization({
+        name: organizationForm.name,
+        legal_name: organizationForm.legal_name || null,
+        street: organizationForm.street || null,
+        postal_code: organizationForm.postal_code || null,
+        city: organizationForm.city || null,
+        country: organizationForm.country,
+        contact_email: organizationForm.contact_email || null,
+        contact_phone: organizationForm.contact_phone || null,
+      });
+      setOrganization(updatedOrganization);
+      await loadDashboardData();
+    } catch {
+      setLoadError("Organisation konnte nicht gespeichert werden.");
+    }
+  }
+
+  async function handleSubmitUser(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!userForm.selected_user_id && !userForm.password) {
+      setLoadError("Für neue Benutzer ist ein Passwort erforderlich.");
+      return;
+    }
+    try {
+      if (userForm.selected_user_id) {
+        await updateUser(userForm.selected_user_id, {
+          full_name: userForm.full_name || null,
+          password: userForm.password || null,
+          role: userForm.role,
+          is_active: userForm.is_active === "true",
+        });
+      } else {
+        await createUser({
+          email: userForm.email,
+          full_name: userForm.full_name || null,
+          password: userForm.password,
+          role: userForm.role,
+          is_active: userForm.is_active === "true",
+        });
+      }
+      setUserForm({
+        selected_user_id: "",
+        email: "",
+        full_name: "",
+        password: "",
+        role: "viewer",
+        is_active: "true",
+      });
+      await loadDashboardData();
+    } catch {
+      setLoadError("Benutzer konnte nicht gespeichert werden.");
+    }
+  }
+
+  function handleEditUser(user: ManagedUser) {
+    setUserForm({
+      selected_user_id: user.id,
+      email: user.email,
+      full_name: user.full_name ?? "",
+      password: "",
+      role: user.role,
+      is_active: user.is_active ? "true" : "false",
+    });
   }
 
   async function handleLogin(event: FormEvent<HTMLFormElement>) {
@@ -720,7 +838,7 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
       return;
     }
     void loadDashboardData();
-  }, [isAuthenticated]);
+  }, [isAuthenticated, currentUser?.id]);
 
   const totalAccountingAmount = useMemo(
     () => entries.reduce((sum, entry) => sum + entry.amount, 0),
@@ -764,6 +882,18 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
         ]),
       ),
     [payments],
+  );
+  const filteredUsers = useMemo(
+    () =>
+      users.filter((user) =>
+        matchesSearch(userList.search, [
+          user.email,
+          user.full_name,
+          user.role,
+          user.is_active ? "aktiv" : "inaktiv",
+        ]),
+      ),
+    [userList.search, users],
   );
   const hasRunningOcrJobs = useMemo(
     () => documents.some((document) => ["queued", "processing"].includes(document.ocr_status)),
@@ -950,6 +1080,14 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
     overview: {
       title: "Immobilienverwaltung Dashboard",
       subtitle: "Zentrale Übersicht über Kennzahlen, Portfolio und letzte Vorgänge.",
+    },
+    organization: {
+      title: "Organisation",
+      subtitle: "Mandantendaten, Kontaktinformationen und Adresse der Organisation verwalten.",
+    },
+    users: {
+      title: "Benutzerverwaltung",
+      subtitle: "Benutzer der aktuellen Organisation anlegen, suchen und Rollen pflegen.",
     },
     properties: {
       title: "Immobilien",
@@ -1189,6 +1327,295 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
             </Grid>
           </Grid>
         </>
+      ) : null}
+
+      {currentRoute === "organization" ? (
+        <Grid container spacing={2}>
+          <Grid item xs={12} md={canManageUsers ? 6 : 12}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>
+                  Organisationsprofil
+                </Typography>
+                <Stack spacing={1.5}>
+                  <Typography>
+                    <strong>Name:</strong> {organization?.name ?? "-"}
+                  </Typography>
+                  <Typography>
+                    <strong>Rechtlicher Name:</strong> {organization?.legal_name ?? "-"}
+                  </Typography>
+                  <Typography>
+                    <strong>Adresse:</strong>{" "}
+                    {[organization?.street, organization?.postal_code, organization?.city]
+                      .filter(Boolean)
+                      .join(", ") || "-"}
+                  </Typography>
+                  <Typography>
+                    <strong>Land:</strong> {organization?.country ?? "-"}
+                  </Typography>
+                  <Typography>
+                    <strong>Kontakt:</strong> {organization?.contact_email ?? "-"} ·{" "}
+                    {organization?.contact_phone ?? "-"}
+                  </Typography>
+                </Stack>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          {canManageUsers ? (
+            <Grid item xs={12} md={6}>
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    Organisation bearbeiten
+                  </Typography>
+                  <Stack component="form" spacing={2} onSubmit={handleUpdateOrganization}>
+                    <TextField
+                      label="Name"
+                      value={organizationForm.name}
+                      onChange={(event) =>
+                        setOrganizationForm((current) => ({
+                          ...current,
+                          name: event.target.value,
+                        }))
+                      }
+                    />
+                    <TextField
+                      label="Rechtlicher Name"
+                      value={organizationForm.legal_name}
+                      onChange={(event) =>
+                        setOrganizationForm((current) => ({
+                          ...current,
+                          legal_name: event.target.value,
+                        }))
+                      }
+                    />
+                    <TextField
+                      label="Straße"
+                      value={organizationForm.street}
+                      onChange={(event) =>
+                        setOrganizationForm((current) => ({
+                          ...current,
+                          street: event.target.value,
+                        }))
+                      }
+                    />
+                    <TextField
+                      label="PLZ"
+                      value={organizationForm.postal_code}
+                      onChange={(event) =>
+                        setOrganizationForm((current) => ({
+                          ...current,
+                          postal_code: event.target.value,
+                        }))
+                      }
+                    />
+                    <TextField
+                      label="Stadt"
+                      value={organizationForm.city}
+                      onChange={(event) =>
+                        setOrganizationForm((current) => ({
+                          ...current,
+                          city: event.target.value,
+                        }))
+                      }
+                    />
+                    <TextField
+                      label="Land"
+                      value={organizationForm.country}
+                      onChange={(event) =>
+                        setOrganizationForm((current) => ({
+                          ...current,
+                          country: event.target.value,
+                        }))
+                      }
+                    />
+                    <TextField
+                      label="Kontakt-E-Mail"
+                      value={organizationForm.contact_email}
+                      onChange={(event) =>
+                        setOrganizationForm((current) => ({
+                          ...current,
+                          contact_email: event.target.value,
+                        }))
+                      }
+                    />
+                    <TextField
+                      label="Kontakt-Telefon"
+                      value={organizationForm.contact_phone}
+                      onChange={(event) =>
+                        setOrganizationForm((current) => ({
+                          ...current,
+                          contact_phone: event.target.value,
+                        }))
+                      }
+                    />
+                    <Box>
+                      <Button type="submit" variant="contained">
+                        Organisation speichern
+                      </Button>
+                    </Box>
+                  </Stack>
+                </CardContent>
+              </Card>
+            </Grid>
+          ) : (
+            <Grid item xs={12}>
+              <Alert severity="info">
+                Nur Owner können Organisationsdaten ändern.
+              </Alert>
+            </Grid>
+          )}
+        </Grid>
+      ) : null}
+
+      {currentRoute === "users" ? (
+        <Grid container spacing={2}>
+          {canManageUsers ? (
+            <Grid item xs={12} md={5}>
+              <Card>
+                <CardContent>
+                  <Stack
+                    direction="row"
+                    justifyContent="space-between"
+                    alignItems="center"
+                    sx={{ mb: 2 }}
+                  >
+                    <Typography variant="h6">
+                      {userForm.selected_user_id ? "Benutzer bearbeiten" : "Benutzer anlegen"}
+                    </Typography>
+                    {userForm.selected_user_id ? (
+                      <Button
+                        size="small"
+                        onClick={() =>
+                          setUserForm({
+                            selected_user_id: "",
+                            email: "",
+                            full_name: "",
+                            password: "",
+                            role: "viewer",
+                            is_active: "true",
+                          })
+                        }
+                      >
+                        Neu
+                      </Button>
+                    ) : null}
+                  </Stack>
+                  <Stack component="form" spacing={2} onSubmit={handleSubmitUser}>
+                    <TextField
+                      label="E-Mail"
+                      value={userForm.email}
+                      disabled={Boolean(userForm.selected_user_id)}
+                      onChange={(event) =>
+                        setUserForm((current) => ({
+                          ...current,
+                          email: event.target.value,
+                        }))
+                      }
+                    />
+                    <TextField
+                      label="Name"
+                      value={userForm.full_name}
+                      onChange={(event) =>
+                        setUserForm((current) => ({
+                          ...current,
+                          full_name: event.target.value,
+                        }))
+                      }
+                    />
+                    <TextField
+                      label={userForm.selected_user_id ? "Neues Passwort (optional)" : "Passwort"}
+                      type="password"
+                      value={userForm.password}
+                      onChange={(event) =>
+                        setUserForm((current) => ({
+                          ...current,
+                          password: event.target.value,
+                        }))
+                      }
+                    />
+                    <TextField
+                      select
+                      label="Rolle"
+                      value={userForm.role}
+                      onChange={(event) =>
+                        setUserForm((current) => ({
+                          ...current,
+                          role: event.target.value,
+                        }))
+                      }
+                    >
+                      <MenuItem value="owner">Owner</MenuItem>
+                      <MenuItem value="manager">Manager</MenuItem>
+                      <MenuItem value="viewer">Viewer</MenuItem>
+                    </TextField>
+                    <TextField
+                      select
+                      label="Status"
+                      value={userForm.is_active}
+                      onChange={(event) =>
+                        setUserForm((current) => ({
+                          ...current,
+                          is_active: event.target.value,
+                        }))
+                      }
+                    >
+                      <MenuItem value="true">Aktiv</MenuItem>
+                      <MenuItem value="false">Inaktiv</MenuItem>
+                    </TextField>
+                    <Box>
+                      <Button type="submit" variant="contained">
+                        {userForm.selected_user_id ? "Benutzer speichern" : "Benutzer anlegen"}
+                      </Button>
+                    </Box>
+                  </Stack>
+                </CardContent>
+              </Card>
+            </Grid>
+          ) : null}
+
+          <Grid item xs={12} md={canManageUsers ? 7 : 12}>
+            {canViewUsers ? (
+              <ManagedListCard
+                title="Benutzer"
+                items={filteredUsers}
+                emptyText="Noch keine Benutzer vorhanden."
+                searchValue={userList.search}
+                onSearchChange={(value) =>
+                  setUserList((current) => ({ ...current, search: value, page: 1 }))
+                }
+                page={userList.page}
+                onPageChange={(page) => setUserList((current) => ({ ...current, page }))}
+                pageSize={userList.pageSize}
+                onPageSizeChange={(pageSize) =>
+                  setUserList((current) => ({ ...current, pageSize, page: 1 }))
+                }
+                searchLabel="E-Mail, Name oder Rolle"
+                helperText={
+                  canManageUsers
+                    ? "Owner können neue Benutzer anlegen und bestehende Benutzer bearbeiten."
+                    : "Manager können die Benutzerliste einsehen, aber keine Änderungen speichern."
+                }
+                renderPrimary={(user) => user.email}
+                renderSecondary={(user) =>
+                  `${user.full_name ?? "-"} · ${user.role} · ${user.is_active ? "aktiv" : "inaktiv"}`
+                }
+                renderActions={(user) =>
+                  canManageUsers ? (
+                    <Button size="small" variant="outlined" onClick={() => handleEditUser(user)}>
+                      Bearbeiten
+                    </Button>
+                  ) : null
+                }
+              />
+            ) : (
+              <Alert severity="info">
+                Benutzerlisten sind nur für Owner und Manager sichtbar.
+              </Alert>
+            )}
+          </Grid>
+        </Grid>
       ) : null}
 
       {currentRoute === "properties" ? (

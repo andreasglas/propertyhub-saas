@@ -16,6 +16,8 @@ import { useAuth } from "../context/AuthContext";
 
 const navigationItems: Array<{ route: AppRoute; label: string }> = [
   { route: "overview", label: "Übersicht" },
+  { route: "organization", label: "Organisation" },
+  { route: "users", label: "Benutzer" },
   { route: "properties", label: "Immobilien" },
   { route: "units", label: "Einheiten" },
   { route: "tenants", label: "Mieter" },

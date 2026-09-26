@@ -48,6 +48,144 @@ def test_auth_me_returns_authenticated_user(
     assert payload["email"] == "admin@example.com"
     assert payload["role"] == "owner"
     assert payload["is_active"] is True
+    assert payload["organization_id"] == "00000000-0000-0000-0000-000000000001"
+
+
+def test_organization_me_can_be_read_and_updated(
+    client: TestClient, auth_headers: dict[str, str], viewer_auth_headers: dict[str, str]
+) -> None:
+    get_response = client.get("/api/v1/organization/me", headers=auth_headers)
+    assert get_response.status_code == 200
+    assert get_response.json()["name"] == "PropertyHub Demo Organisation"
+
+    update_response = client.put(
+        "/api/v1/organization/me",
+        headers=auth_headers,
+        json={
+            "name": "PropertyHub Verwaltung Berlin",
+            "legal_name": "PropertyHub Verwaltung Berlin GmbH",
+            "street": "Musterstraße 10",
+            "postal_code": "10115",
+            "city": "Berlin",
+            "country": "Deutschland",
+            "contact_email": "office@propertyhub.de",
+            "contact_phone": "+49 30 1234567",
+        },
+    )
+    assert update_response.status_code == 200
+    assert update_response.json()["legal_name"] == "PropertyHub Verwaltung Berlin GmbH"
+
+    viewer_update_response = client.put(
+        "/api/v1/organization/me",
+        headers=viewer_auth_headers,
+        json={
+            "name": "Nicht erlaubt",
+            "legal_name": None,
+            "street": None,
+            "postal_code": None,
+            "city": None,
+            "country": "Deutschland",
+            "contact_email": None,
+            "contact_phone": None,
+        },
+    )
+    assert viewer_update_response.status_code == 403
+
+
+def test_users_can_be_managed_within_current_organization(
+    client: TestClient, auth_headers: dict[str, str], viewer_auth_headers: dict[str, str]
+) -> None:
+    create_response = client.post(
+        "/api/v1/users/",
+        headers=auth_headers,
+        json={
+            "email": "manager@example.com",
+            "full_name": "Manager User",
+            "password": "manager-password",
+            "role": "manager",
+            "is_active": True,
+        },
+    )
+    assert create_response.status_code == 201
+    created_user = create_response.json()
+    assert created_user["organization_id"] == "00000000-0000-0000-0000-000000000001"
+    user_id = created_user["id"]
+
+    list_response = client.get("/api/v1/users/", headers=auth_headers)
+    assert list_response.status_code == 200
+    assert len(list_response.json()) >= 2
+
+    viewer_list_response = client.get("/api/v1/users/", headers=viewer_auth_headers)
+    assert viewer_list_response.status_code == 403
+
+    update_response = client.put(
+        f"/api/v1/users/{user_id}",
+        headers=auth_headers,
+        json={
+            "full_name": "Manager User Updated",
+            "password": "new-manager-password",
+            "role": "manager",
+            "is_active": False,
+        },
+    )
+    assert update_response.status_code == 200
+    assert update_response.json()["full_name"] == "Manager User Updated"
+    assert update_response.json()["is_active"] is False
+
+
+def test_users_are_scoped_to_authenticated_organization(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    create_response = client.post(
+        "/api/v1/users/",
+        headers=auth_headers,
+        json={
+            "email": "org-owned@example.com",
+            "full_name": "Org Owned User",
+            "password": "org-owned-password",
+            "role": "viewer",
+            "is_active": True,
+        },
+    )
+    assert create_response.status_code == 201
+    created_user_id = create_response.json()["id"]
+
+    with SessionLocal() as db:
+        db.add(
+            User(
+                organization_id="00000000-0000-0000-0000-000000000099",
+                email="foreign-owner@example.com",
+                full_name="Foreign Owner",
+                hashed_password=get_password_hash("foreign-password"),
+                role="owner",
+                is_active=True,
+            )
+        )
+        db.commit()
+
+    login_response = client.post(
+        "/api/v1/auth/token",
+        data={"username": "foreign-owner@example.com", "password": "foreign-password"},
+    )
+    foreign_headers = {
+        "Authorization": "Bearer " + login_response.json()["access_token"]
+    }
+
+    list_response = client.get("/api/v1/users/", headers=foreign_headers)
+    assert list_response.status_code == 200
+    assert all(user["id"] != created_user_id for user in list_response.json())
+
+    update_response = client.put(
+        f"/api/v1/users/{created_user_id}",
+        headers=foreign_headers,
+        json={
+            "full_name": "Should Not Work",
+            "password": None,
+            "role": "viewer",
+            "is_active": True,
+        },
+    )
+    assert update_response.status_code == 404
 
 
 def test_viewer_role_is_read_only(

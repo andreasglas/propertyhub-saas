@@ -7,6 +7,7 @@ type TokenResponse = {
 
 export type AuthUser = {
   id: string;
+  organization_id: string;
   email: string;
   full_name?: string | null;
   role: string;

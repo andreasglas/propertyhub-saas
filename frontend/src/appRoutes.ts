@@ -1,5 +1,7 @@
 export type AppRoute =
   | "overview"
+  | "organization"
+  | "users"
   | "properties"
   | "units"
   | "tenants"
@@ -11,6 +13,8 @@ export type AppRoute =
 
 export const appRoutePaths: Record<AppRoute, string> = {
   overview: "/",
+  organization: "/organization",
+  users: "/users",
   properties: "/properties",
   units: "/units",
   tenants: "/tenants",
