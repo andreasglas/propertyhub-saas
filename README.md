@@ -37,6 +37,38 @@ docker compose up --build
 
 Startet Backend, Frontend, PostgreSQL, Redis und einen Celery-Worker für OCR-Hintergrundjobs.
 
+Alternativ per Python-Startskript:
+
+```bash
+python /home/runner/work/propertyhub-saas/propertyhub-saas/start_propertyhub.py
+```
+
+Im Hintergrund starten:
+
+```bash
+python /home/runner/work/propertyhub-saas/propertyhub-saas/start_propertyhub.py --detached
+```
+
+Das Skript erstellt bei Bedarf automatisch `.env` und `backend/.env` aus den Example-Dateien und zeigt dir danach die lokalen URLs an.
+
+### Start-Checkliste
+
+1. Docker Desktop oder Docker Engine mit `docker compose` muss laufen.
+2. Optional in `/home/runner/work/propertyhub-saas/propertyhub-saas/backend/.env` `SECRET_KEY` und `BOOTSTRAP_ADMIN_PASSWORD` anpassen.
+3. Starten mit:
+
+   ```bash
+   python /home/runner/work/propertyhub-saas/propertyhub-saas/start_propertyhub.py --detached
+   ```
+
+4. Danach öffnen:
+   - Frontend: `http://localhost:5173`
+   - Backend: `http://localhost:8000`
+   - Swagger UI: `http://localhost:8000/docs`
+5. Anmelden mit:
+   - E-Mail: `admin@example.com`
+   - Passwort: Wert aus `BOOTSTRAP_ADMIN_PASSWORD` in `backend/.env`
+
 ### Backend lokal
 
 ```bash
