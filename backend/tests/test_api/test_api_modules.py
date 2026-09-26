@@ -1636,3 +1636,61 @@ def test_documents_are_scoped_and_viewer_cannot_upload(
         f"/api/v1/documents/{document_id}", headers=other_headers
     )
     assert other_detail_response.status_code == 404
+
+
+def test_document_ocr_can_be_applied_to_invoice(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    invoice_response = client.post(
+        "/api/v1/invoices/",
+        headers=auth_headers,
+        json={
+            "property_id": None,
+            "vendor_name": "Placeholder Vendor",
+            "invoice_number": None,
+            "invoice_date": None,
+            "gross_amount": 99,
+            "status": "draft",
+        },
+    )
+    assert invoice_response.status_code == 201
+    invoice_id = invoice_response.json()["id"]
+
+    upload_response = client.post(
+        "/api/v1/documents/upload",
+        headers=auth_headers,
+        data={
+            "related_model": "invoice",
+            "related_id": invoice_id,
+            "document_type": "invoice_receipt",
+        },
+        files={
+            "file": (
+                "invoice-apply.txt",
+                BytesIO(
+                    b"Vendor: Better Vendor GmbH\nInvoice Number: OCR-9001\nInvoice Date: 2026-09-01\nGross Amount: 777.70\n"
+                ),
+                "text/plain",
+            )
+        },
+    )
+    document_id = upload_response.json()["id"]
+
+    process_response = client.post(
+        f"/api/v1/documents/{document_id}/process-ocr",
+        headers=auth_headers,
+    )
+    assert process_response.status_code == 200
+
+    apply_response = client.post(
+        f"/api/v1/documents/{document_id}/apply-ocr-to-invoice",
+        headers=auth_headers,
+    )
+    assert apply_response.status_code == 200
+    payload = apply_response.json()
+    assert payload["document"]["ocr_status"] == "processed"
+    assert payload["invoice"]["vendor_name"] == "Better Vendor GmbH"
+    assert payload["invoice"]["invoice_number"] == "OCR-9001"
+    assert payload["invoice"]["invoice_date"] == "2026-09-01"
+    assert payload["invoice"]["gross_amount"] == 777.7
+    assert payload["invoice"]["status"] == "received"

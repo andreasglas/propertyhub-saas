@@ -44,3 +44,20 @@ export async function processDocumentOcr(documentId: string) {
   );
   return response.data.document;
 }
+
+export async function applyDocumentOcrToInvoice(documentId: string) {
+  const response = await apiClient.post<{
+    document: DocumentRecord;
+    invoice: {
+      id: string;
+      organization_id: string;
+      property_id?: string | null;
+      vendor_name: string;
+      invoice_number?: string | null;
+      invoice_date?: string | null;
+      gross_amount: number;
+      status: string;
+    };
+  }>(`/documents/${documentId}/apply-ocr-to-invoice`);
+  return response.data;
+}

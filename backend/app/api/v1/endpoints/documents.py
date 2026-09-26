@@ -4,7 +4,11 @@ from sqlalchemy.orm import Session
 from app.core.dependencies import get_current_user, require_roles
 from app.db.models.user import User
 from app.db.session import get_db
-from app.schemas.document import DocumentOcrResult, DocumentRead
+from app.schemas.document import (
+    DocumentInvoiceApplyResult,
+    DocumentOcrResult,
+    DocumentRead,
+)
 from app.services.document_service import DocumentService
 
 router = APIRouter()
@@ -55,3 +59,15 @@ async def process_document_ocr(
 ) -> DocumentOcrResult:
     document = service.process_ocr(db, current_user.organization_id, document_id)
     return DocumentOcrResult(document=document)
+
+
+@router.post("/{document_id}/apply-ocr-to-invoice", response_model=DocumentInvoiceApplyResult)
+async def apply_document_ocr_to_invoice(
+    document_id: str,
+    current_user: User = Depends(require_roles("owner", "manager")),
+    db: Session = Depends(get_db),
+) -> DocumentInvoiceApplyResult:
+    document, invoice = service.apply_ocr_to_invoice(
+        db, current_user.organization_id, document_id
+    )
+    return DocumentInvoiceApplyResult(document=document, invoice=invoice)

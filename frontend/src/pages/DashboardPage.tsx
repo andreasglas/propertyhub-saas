@@ -29,6 +29,7 @@ import {
   matchBankTransaction,
 } from "../services/bankingService";
 import {
+  applyDocumentOcrToInvoice,
   DocumentRecord,
   listDocuments,
   processDocumentOcr,
@@ -169,6 +170,19 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
       await loadDashboardData();
     } catch {
       setLoadError("OCR-Verarbeitung konnte nicht gestartet werden.");
+    } finally {
+      setDocumentActionLoading(false);
+    }
+  }
+
+  async function handleApplyDocumentToInvoice(documentId: string) {
+    setDocumentActionLoading(true);
+    setLoadError(null);
+    try {
+      await applyDocumentOcrToInvoice(documentId);
+      await loadDashboardData();
+    } catch {
+      setLoadError("OCR-Daten konnten nicht in die Rechnung übernommen werden.");
     } finally {
       setDocumentActionLoading(false);
     }
@@ -1017,14 +1031,26 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
                         </Typography>
                       ) : null}
                       {canManageData ? (
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          onClick={() => void handleProcessDocument(document.id)}
-                          disabled={documentActionLoading}
-                        >
-                          OCR testen
-                        </Button>
+                        <Stack direction="row" spacing={1}>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            onClick={() => void handleProcessDocument(document.id)}
+                            disabled={documentActionLoading}
+                          >
+                            OCR testen
+                          </Button>
+                          {document.related_model === "invoice" && document.ocr_result ? (
+                            <Button
+                              size="small"
+                              variant="contained"
+                              onClick={() => void handleApplyDocumentToInvoice(document.id)}
+                              disabled={documentActionLoading}
+                            >
+                              In Rechnung übernehmen
+                            </Button>
+                          ) : null}
+                        </Stack>
                       ) : null}
                     </ListItem>
                   ))}

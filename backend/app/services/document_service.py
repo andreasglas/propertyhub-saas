@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
@@ -114,3 +114,50 @@ class DocumentService:
         db.commit()
         db.refresh(document)
         return document
+
+    def apply_ocr_to_invoice(
+        self, db: Session, organization_id: str, document_id: str
+    ) -> tuple[Document, Invoice]:
+        document = self.get_document(db, organization_id, document_id)
+        if document.related_model != "invoice":
+            raise PropertyHubError(
+                "OCR application is only supported for invoice documents",
+                status_code=400,
+            )
+        if document.ocr_status != "processed" or not document.ocr_result:
+            raise PropertyHubError("Document OCR must be processed first", status_code=400)
+
+        invoice = db.scalar(
+            select(Invoice).where(
+                Invoice.id == document.related_id,
+                Invoice.organization_id == organization_id,
+            )
+        )
+        if invoice is None:
+            raise PropertyHubError("Invoice not found", status_code=404)
+
+        ocr_result = document.ocr_result
+        vendor_name = ocr_result.get("vendor_name")
+        if isinstance(vendor_name, str) and vendor_name.strip():
+            invoice.vendor_name = vendor_name.strip()
+
+        invoice_number = ocr_result.get("invoice_number")
+        if isinstance(invoice_number, str) and invoice_number.strip():
+            invoice.invoice_number = invoice_number.strip()
+
+        invoice_date = ocr_result.get("invoice_date")
+        if isinstance(invoice_date, str) and invoice_date.strip():
+            invoice.invoice_date = date.fromisoformat(invoice_date)
+
+        gross_amount = ocr_result.get("gross_amount")
+        if isinstance(gross_amount, int | float) and gross_amount > 0:
+            invoice.gross_amount = float(gross_amount)
+
+        if invoice.status == "draft":
+            invoice.status = "received"
+
+        db.add(invoice)
+        db.commit()
+        db.refresh(invoice)
+        db.refresh(document)
+        return document, invoice

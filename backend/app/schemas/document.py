@@ -3,6 +3,8 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from app.schemas.invoice import InvoiceRead
+
 
 class DocumentRead(BaseModel):
     id: str
@@ -21,3 +23,8 @@ class DocumentRead(BaseModel):
 
 class DocumentOcrResult(BaseModel):
     document: DocumentRead
+
+
+class DocumentInvoiceApplyResult(BaseModel):
+    document: DocumentRead
+    invoice: InvoiceRead

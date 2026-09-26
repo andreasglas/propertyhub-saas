@@ -80,6 +80,7 @@ Die folgenden Module sind als strukturierte Einstiegspunkte vorhanden:
 - `POST /api/v1/documents/upload`
 - `GET /api/v1/documents/{document_id}`
 - `POST /api/v1/documents/{document_id}/process-ocr`
+- `POST /api/v1/documents/{document_id}/apply-ocr-to-invoice`
 - `GET /api/v1/accounting/`
 - `POST /api/v1/accounting/`
 - `GET /api/v1/accounting/{entry_id}`
