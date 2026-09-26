@@ -65,6 +65,7 @@ Das Frontend nutzt im Development standardmäßig den relativen Pfad `/api`; lok
 - Celery- und Redis-Grundstruktur für Hintergrundjobs
 - React/Vite/MUI-Dashboard-Starter
 - Zentrale API-Client-Abstraktion im Frontend
+- erster Dokumenten- und OCR-Testpfad für Rechnungsbelege
 
 ## Weiterführende Dokumentation
 

@@ -19,6 +19,7 @@ const navigationItems: Array<{ route: AppRoute; label: string }> = [
   { route: "accounting", label: "Accounting" },
   { route: "billing", label: "Billing" },
   { route: "banking", label: "Banking" },
+  { route: "documents", label: "Dokumente" },
 ];
 
 type AppShellProps = PropsWithChildren<{

@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Box,
@@ -28,6 +28,12 @@ import {
   listBankTransactions,
   matchBankTransaction,
 } from "../services/bankingService";
+import {
+  DocumentRecord,
+  listDocuments,
+  processDocumentOcr,
+  uploadDocument,
+} from "../services/documentService";
 import { createInvoice, Invoice, listInvoices } from "../services/invoiceService";
 import { createPayment, listPayments, Payment } from "../services/paymentService";
 import { Property, listProperties } from "../services/propertyService";
@@ -53,9 +59,12 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [bankTransactions, setBankTransactions] = useState<BankTransaction[]>([]);
+  const [documents, setDocuments] = useState<DocumentRecord[]>([]);
   const [report, setReport] = useState<DashboardReport | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [bankingActionLoading, setBankingActionLoading] = useState(false);
+  const [documentActionLoading, setDocumentActionLoading] = useState(false);
+  const [selectedDocumentFile, setSelectedDocumentFile] = useState<File | null>(null);
   const [entryForm, setEntryForm] = useState({
     property_id: "",
     entry_type: "expense",
@@ -77,6 +86,11 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
     booking_date: "",
     reference: "",
   });
+  const [documentForm, setDocumentForm] = useState({
+    related_model: "invoice",
+    related_id: "",
+    document_type: "invoice_receipt",
+  });
 
   async function loadDashboardData() {
     setLoading(true);
@@ -88,6 +102,7 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
         loadedInvoices,
         loadedPayments,
         loadedBankTransactions,
+        loadedDocuments,
         loadedReport,
       ] = await Promise.all([
         listProperties(),
@@ -95,6 +110,7 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
         listInvoices(),
         listPayments(),
         listBankTransactions(),
+        listDocuments(),
         getDashboardReport(),
       ]);
       setProperties(loadedProperties);
@@ -102,11 +118,59 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
       setInvoices(loadedInvoices);
       setPayments(loadedPayments);
       setBankTransactions(loadedBankTransactions);
+      setDocuments(loadedDocuments);
       setReport(loadedReport);
     } catch {
       setLoadError("Daten konnten nicht geladen werden.");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleDocumentFileChange(event: ChangeEvent<HTMLInputElement>) {
+    setSelectedDocumentFile(event.target.files?.[0] ?? null);
+  }
+
+  async function handleUploadDocument(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedDocumentFile || !documentForm.related_id) {
+      setLoadError("Bitte Rechnung und Datei für den Dokumentenupload auswählen.");
+      return;
+    }
+
+    setDocumentActionLoading(true);
+    setLoadError(null);
+    try {
+      await uploadDocument({
+        related_model: documentForm.related_model,
+        related_id: documentForm.related_id,
+        document_type: documentForm.document_type,
+        file: selectedDocumentFile,
+      });
+      setSelectedDocumentFile(null);
+      setDocumentForm({
+        related_model: "invoice",
+        related_id: "",
+        document_type: "invoice_receipt",
+      });
+      await loadDashboardData();
+    } catch {
+      setLoadError("Dokument konnte nicht hochgeladen werden.");
+    } finally {
+      setDocumentActionLoading(false);
+    }
+  }
+
+  async function handleProcessDocument(documentId: string) {
+    setDocumentActionLoading(true);
+    setLoadError(null);
+    try {
+      await processDocumentOcr(documentId);
+      await loadDashboardData();
+    } catch {
+      setLoadError("OCR-Verarbeitung konnte nicht gestartet werden.");
+    } finally {
+      setDocumentActionLoading(false);
     }
   }
 
@@ -137,6 +201,10 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
     banking: {
       title: "Banking",
       subtitle: "Kontoereignisse importieren und Zahlungen zuordnen.",
+    },
+    documents: {
+      title: "Dokumente & OCR",
+      subtitle: "Belege hochladen und erste Rechnungsdaten automatisch auslesen.",
     },
   };
 
@@ -303,6 +371,7 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
     { label: "Rechnungen offen", value: String(report?.open_invoices_count ?? 0) },
     { label: "Zahlungen", value: String(report?.payments_count ?? payments.length) },
     { label: "Banktransaktionen", value: String(bankTransactions.length) },
+    { label: "Dokumente", value: String(documents.length) },
     {
       label: "Accounting Gesamt",
       value: `${(report?.total_expense_amount ?? totalAccountingAmount).toFixed(2)} €`,
@@ -334,7 +403,7 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
         <>
           <Grid container spacing={2}>
             {kpis.map((kpi) => (
-              <Grid key={kpi.label} item xs={12} sm={6} md={3}>
+              <Grid key={kpi.label} item xs={12} sm={6} md={4}>
                 <Card>
                   <CardContent>
                     <Typography color="text.secondary" variant="body2">
@@ -855,6 +924,120 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
             </List>
           </CardContent>
         </Card>
+      ) : null}
+
+      {currentRoute === "documents" ? (
+        <Grid container spacing={2}>
+          {canManageData ? (
+            <Grid item xs={12} md={5}>
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    Dokument hochladen
+                  </Typography>
+                  <Stack component="form" spacing={2} onSubmit={handleUploadDocument}>
+                    <TextField
+                      select
+                      label="Bezug"
+                      value={documentForm.related_id}
+                      onChange={(event) =>
+                        setDocumentForm((current) => ({
+                          ...current,
+                          related_id: event.target.value,
+                        }))
+                      }
+                    >
+                      <MenuItem value="">Rechnung wählen</MenuItem>
+                      {invoices.map((invoice) => (
+                        <MenuItem key={invoice.id} value={invoice.id}>
+                          {invoice.vendor_name} · {invoice.gross_amount.toFixed(2)} €
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                    <TextField
+                      select
+                      label="Dokumenttyp"
+                      value={documentForm.document_type}
+                      onChange={(event) =>
+                        setDocumentForm((current) => ({
+                          ...current,
+                          document_type: event.target.value,
+                        }))
+                      }
+                    >
+                      <MenuItem value="invoice_receipt">Rechnungsbeleg</MenuItem>
+                      <MenuItem value="contract_attachment">Vertragsanhang</MenuItem>
+                    </TextField>
+                    <Button variant="outlined" component="label">
+                      Datei auswählen
+                      <input hidden type="file" onChange={handleDocumentFileChange} />
+                    </Button>
+                    <Typography color="text.secondary" variant="body2">
+                      {selectedDocumentFile
+                        ? `Ausgewählt: ${selectedDocumentFile.name}`
+                        : "Zum Testen funktioniert besonders gut eine .txt-Datei mit Feldern wie Vendor, Invoice Number, Invoice Date und Gross Amount."}
+                    </Typography>
+                    <Box>
+                      <Button
+                        type="submit"
+                        variant="contained"
+                        disabled={documentActionLoading}
+                      >
+                        Dokument hochladen
+                      </Button>
+                    </Box>
+                  </Stack>
+                </CardContent>
+              </Card>
+            </Grid>
+          ) : null}
+
+          <Grid item xs={12} md={canManageData ? 7 : 12}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>
+                  Dokumente
+                </Typography>
+                <List dense>
+                  {documents.map((document) => (
+                    <ListItem
+                      key={document.id}
+                      disableGutters
+                      sx={{ alignItems: "flex-start", flexDirection: "column", gap: 1.5 }}
+                    >
+                      <ListItemText
+                        primary={`${document.file_name} · ${document.document_type}`}
+                        secondary={`Status: ${document.ocr_status} · Bezug: ${document.related_model}`}
+                      />
+                      {document.ocr_result ? (
+                        <Typography color="text.secondary" variant="body2">
+                          OCR: {document.ocr_result.vendor_name ?? "-"} ·{" "}
+                          {document.ocr_result.invoice_number ?? "-"} ·{" "}
+                          {document.ocr_result.gross_amount ?? "-"}
+                        </Typography>
+                      ) : null}
+                      {canManageData ? (
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          onClick={() => void handleProcessDocument(document.id)}
+                          disabled={documentActionLoading}
+                        >
+                          OCR testen
+                        </Button>
+                      ) : null}
+                    </ListItem>
+                  ))}
+                  {!documents.length ? (
+                    <Typography color="text.secondary">
+                      Noch keine Dokumente vorhanden.
+                    </Typography>
+                  ) : null}
+                </List>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
       ) : null}
     </Stack>
   );

@@ -1,4 +1,5 @@
 from fastapi.testclient import TestClient
+from io import BytesIO
 
 from app.core.security import get_password_hash
 from app.db.models.property import Property
@@ -1492,3 +1493,146 @@ def test_banking_transaction_can_be_matched_to_payment(
     matched_transaction = match_response.json()
     assert matched_transaction["payment_id"] == payment_response.json()["id"]
     assert matched_transaction["status"] == "matched"
+
+
+def test_documents_upload_and_process_ocr(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    invoice_response = client.post(
+        "/api/v1/invoices/",
+        headers=auth_headers,
+        json={
+            "property_id": None,
+            "vendor_name": "Initial Vendor",
+            "invoice_number": None,
+            "invoice_date": None,
+            "gross_amount": 100,
+            "status": "received",
+        },
+    )
+    assert invoice_response.status_code == 201
+    invoice_id = invoice_response.json()["id"]
+
+    upload_response = client.post(
+        "/api/v1/documents/upload",
+        headers=auth_headers,
+        data={
+            "related_model": "invoice",
+            "related_id": invoice_id,
+            "document_type": "invoice_receipt",
+        },
+        files={
+            "file": (
+                "invoice-acme.txt",
+                BytesIO(
+                    b"Vendor: ACME GmbH\nInvoice Number: INV-2026-001\nInvoice Date: 2026-09-26\nGross Amount: 420.50\n"
+                ),
+                "text/plain",
+            )
+        },
+    )
+    assert upload_response.status_code == 201
+    document = upload_response.json()
+    assert document["ocr_status"] == "pending"
+    document_id = document["id"]
+
+    list_response = client.get("/api/v1/documents/", headers=auth_headers)
+    assert list_response.status_code == 200
+    assert len(list_response.json()) == 1
+
+    ocr_response = client.post(
+        f"/api/v1/documents/{document_id}/process-ocr",
+        headers=auth_headers,
+    )
+    assert ocr_response.status_code == 200
+    processed_document = ocr_response.json()["document"]
+    assert processed_document["ocr_status"] == "processed"
+    assert processed_document["ocr_result"]["vendor_name"] == "ACME GmbH"
+    assert processed_document["ocr_result"]["invoice_number"] == "INV-2026-001"
+    assert processed_document["ocr_result"]["gross_amount"] == 420.5
+
+
+def test_documents_are_scoped_and_viewer_cannot_upload(
+    client: TestClient,
+    auth_headers: dict[str, str],
+    viewer_auth_headers: dict[str, str],
+) -> None:
+    invoice_response = client.post(
+        "/api/v1/invoices/",
+        headers=auth_headers,
+        json={
+            "property_id": None,
+            "vendor_name": "Doc Scope Vendor",
+            "invoice_number": None,
+            "invoice_date": None,
+            "gross_amount": 120,
+            "status": "received",
+        },
+    )
+    invoice_id = invoice_response.json()["id"]
+
+    upload_response = client.post(
+        "/api/v1/documents/upload",
+        headers=auth_headers,
+        data={
+            "related_model": "invoice",
+            "related_id": invoice_id,
+            "document_type": "invoice_receipt",
+        },
+        files={
+            "file": (
+                "scope.txt",
+                BytesIO(b"Vendor: Scope GmbH"),
+                "text/plain",
+            )
+        },
+    )
+    assert upload_response.status_code == 201
+    document_id = upload_response.json()["id"]
+
+    viewer_list_response = client.get("/api/v1/documents/", headers=viewer_auth_headers)
+    assert viewer_list_response.status_code == 200
+    assert len(viewer_list_response.json()) == 1
+
+    viewer_upload_response = client.post(
+        "/api/v1/documents/upload",
+        headers=viewer_auth_headers,
+        data={
+            "related_model": "invoice",
+            "related_id": invoice_id,
+            "document_type": "invoice_receipt",
+        },
+        files={
+            "file": (
+                "viewer.txt",
+                BytesIO(b"Vendor: Viewer GmbH"),
+                "text/plain",
+            )
+        },
+    )
+    assert viewer_upload_response.status_code == 403
+
+    with SessionLocal() as db:
+        db.add(
+            User(
+                organization_id="00000000-0000-0000-0000-000000000099",
+                email="document-scope@example.com",
+                full_name="Document Scope User",
+                hashed_password=get_password_hash("scope-password"),
+                role="owner",
+                is_active=True,
+            )
+        )
+        db.commit()
+
+    login_response = client.post(
+        "/api/v1/auth/token",
+        data={"username": "document-scope@example.com", "password": "scope-password"},
+    )
+    other_headers = {
+        "Authorization": "Bearer " + login_response.json()["access_token"]
+    }
+    other_detail_response = client.get(
+        f"/api/v1/documents/{document_id}", headers=other_headers
+    )
+    assert other_detail_response.status_code == 404

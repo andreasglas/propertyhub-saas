@@ -5,6 +5,7 @@ from app.api.v1.endpoints import (
     auth,
     banking,
     contracts,
+    documents,
     invoices,
     payments,
     properties,
@@ -22,6 +23,7 @@ api_router.include_router(contracts.router, prefix="/contracts", tags=["contract
 api_router.include_router(invoices.router, prefix="/invoices", tags=["invoices"])
 api_router.include_router(payments.router, prefix="/payments", tags=["payments"])
 api_router.include_router(banking.router, prefix="/banking", tags=["banking"])
+api_router.include_router(documents.router, prefix="/documents", tags=["documents"])
 api_router.include_router(accounting.router, prefix="/accounting", tags=["accounting"])
 api_router.include_router(reports.router, prefix="/reports", tags=["reports"])
 

@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 from functools import lru_cache
 from typing import Literal
 
@@ -15,6 +16,7 @@ class Settings(BaseSettings):
     algorithm: str = "HS256"
     database_url: str = "sqlite:///./propertyhub.db"
     redis_url: str = "redis://localhost:6379/0"
+    document_storage_dir: str = "./storage/documents"
     backend_cors_origins: list[str] = ["http://localhost:5173", "http://localhost:3000"]
     bootstrap_admin_email: str | None = None
     bootstrap_admin_password: SecretStr | None = None
@@ -36,6 +38,11 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.app_env == "production"
+
+    @computed_field
+    @property
+    def document_storage_path(self) -> Path:
+        return Path(self.document_storage_dir).expanduser().resolve()
 
 
 @lru_cache

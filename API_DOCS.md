@@ -76,6 +76,10 @@ Die folgenden Module sind als strukturierte Einstiegspunkte vorhanden:
 - `DELETE /api/v1/banking/transactions/{transaction_id}`
 - `POST /api/v1/banking/transactions/{transaction_id}/match-payment`
 - `POST /api/v1/banking/import-stub`
+- `GET /api/v1/documents/`
+- `POST /api/v1/documents/upload`
+- `GET /api/v1/documents/{document_id}`
+- `POST /api/v1/documents/{document_id}/process-ocr`
 - `GET /api/v1/accounting/`
 - `POST /api/v1/accounting/`
 - `GET /api/v1/accounting/{entry_id}`
@@ -88,6 +92,11 @@ Der Reporting-Endpunkt liefert aktuell eine Dashboard-Zusammenfassung mit Zähle
 Schreiboperationen sind aktuell auf die Rollen `owner` und `manager` beschränkt; `viewer` bleibt read-only.
 
 Alle Antworten liefern im Initial-Setup einen statusorientierten Payload, damit die Endpunkte früh integrierbar sind und später schrittweise mit Geschäftslogik hinterlegt werden können.
+
+## Dokumente und OCR
+
+- Dokumente können aktuell zu `invoice` oder `property` hochgeladen werden.
+- Der OCR-Endpunkt ist im aktuellen Slice bewusst als pragmatischer Demo-/Entwicklungspfad umgesetzt und extrahiert erste Rechnungsdaten aus Dateiname oder Textinhalt.
 
 ## Nächste API-Schritte
 

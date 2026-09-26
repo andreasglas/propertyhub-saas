@@ -1,10 +1,12 @@
 import os
+import shutil
 
 import pytest
 from fastapi.testclient import TestClient
 
 os.environ.setdefault("APP_ENV", "test")
 os.environ.setdefault("DATABASE_URL", "sqlite:///./test_propertyhub.db")
+os.environ.setdefault("DOCUMENT_STORAGE_DIR", "/tmp/propertyhub-test-documents")
 os.environ.setdefault("SECRET_KEY", "propertyhub-test-secret-key-000000")
 os.environ.setdefault("BOOTSTRAP_ADMIN_EMAIL", "admin@example.com")
 os.environ.setdefault("BOOTSTRAP_ADMIN_PASSWORD", "test-password")
@@ -26,6 +28,7 @@ def create_client() -> TestClient:
 def reset_database() -> None:
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
+    shutil.rmtree("/tmp/propertyhub-test-documents", ignore_errors=True)
     with SessionLocal() as db:
         UserService().ensure_bootstrap_admin(db)
 

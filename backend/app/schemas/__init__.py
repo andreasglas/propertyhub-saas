@@ -10,6 +10,7 @@ from app.schemas.banking import (
     BankTransactionRead,
     BankTransactionUpdate,
 )
+from app.schemas.document import DocumentOcrResult, DocumentRead
 from app.schemas.contract import ContractCreate, ContractRead, ContractUpdate
 from app.schemas.invoice import InvoiceCreate, InvoiceRead, InvoiceUpdate
 from app.schemas.payment import PaymentCreate, PaymentRead, PaymentUpdate
@@ -31,6 +32,8 @@ __all__ = [
     "BankTransactionMatchRequest",
     "BankTransactionRead",
     "BankTransactionUpdate",
+    "DocumentOcrResult",
+    "DocumentRead",
     "InvoiceCreate",
     "InvoiceRead",
     "InvoiceUpdate",
