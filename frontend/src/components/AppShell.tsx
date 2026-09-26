@@ -1,13 +1,13 @@
 import { PropsWithChildren, useMemo, useState } from "react";
 import ApartmentIcon from "@mui/icons-material/Apartment";
 import AssignmentIcon from "@mui/icons-material/Assignment";
+import BusinessIcon from "@mui/icons-material/Business";
 import DescriptionIcon from "@mui/icons-material/Description";
 import GroupsIcon from "@mui/icons-material/Groups";
 import HomeWorkIcon from "@mui/icons-material/HomeWork";
 import MenuIcon from "@mui/icons-material/Menu";
 import PaidIcon from "@mui/icons-material/Paid";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
-import SettingsBusinessIcon from "@mui/icons-material/SettingsBusiness";
 import TableChartIcon from "@mui/icons-material/TableChart";
 import VillaIcon from "@mui/icons-material/Villa";
 import {
@@ -36,7 +36,7 @@ const navigationItems: Array<{ route: AppRoute; label: string; icon: JSX.Element
   {
     route: "organization",
     label: "Organisation",
-    icon: <SettingsBusinessIcon fontSize="small" />,
+    icon: <BusinessIcon fontSize="small" />,
   },
   { route: "users", label: "Benutzer", icon: <GroupsIcon fontSize="small" /> },
   { route: "properties", label: "Immobilien", icon: <VillaIcon fontSize="small" /> },

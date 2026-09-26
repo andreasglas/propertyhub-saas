@@ -187,7 +187,7 @@ function formatPropertyLocation(property: Property) {
 }
 
 function formatStatusLabel(value: string) {
-  return value.replaceAll("_", " ").replace(/\b\w/g, (character) => character.toUpperCase());
+  return value.replace(/_/g, " ").replace(/\b\w/g, (character: string) => character.toUpperCase());
 }
 
 function getStatusChipColor(
