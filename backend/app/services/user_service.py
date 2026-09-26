@@ -1,13 +1,15 @@
+from datetime import datetime, timezone
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.core.exceptions import PropertyHubError
-from app.core.security import get_password_hash
+from app.core.security import create_random_token, get_password_hash
 from app.db.models.organization import Organization
 from app.db.models.user import User
 from app.schemas.organization import OrganizationUpdate
-from app.schemas.user import UserCreate, UserUpdate
+from app.schemas.user import UserCreate, UserInvitationCreate, UserUpdate
 
 
 class UserService:
@@ -87,6 +89,67 @@ class UserService:
             role=payload.role,
             is_active=payload.is_active,
         )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        return user
+
+    def invite_user(
+        self, db: Session, organization_id: str, payload: UserInvitationCreate
+    ) -> tuple[User, str]:
+        existing_user = self.get_user_by_email(db, payload.email)
+        if existing_user is not None:
+            raise PropertyHubError("User with this email already exists", status_code=400)
+
+        invitation_token = create_random_token()
+        user = User(
+            organization_id=organization_id,
+            email=str(payload.email),
+            full_name=payload.full_name,
+            hashed_password=None,
+            role=payload.role,
+            is_active=False,
+            invitation_token=invitation_token,
+            invitation_sent_at=datetime.now(timezone.utc),
+            invitation_accepted_at=None,
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        return user, invitation_token
+
+    def resend_invitation(
+        self, db: Session, organization_id: str, user_id: str
+    ) -> tuple[User, str]:
+        user = self.get_user(db, organization_id, user_id)
+        if user.invitation_accepted_at is not None:
+            raise PropertyHubError("Invitation has already been accepted", status_code=400)
+
+        invitation_token = create_random_token()
+        user.invitation_token = invitation_token
+        user.invitation_sent_at = datetime.now(timezone.utc)
+        user.is_active = False
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        return user, invitation_token
+
+    def get_user_by_invitation_token(self, db: Session, token: str) -> User:
+        user = db.scalar(select(User).where(User.invitation_token == token))
+        if user is None:
+            raise PropertyHubError("Invitation token is invalid", status_code=404)
+        return user
+
+    def accept_invitation(
+        self, db: Session, token: str, password: str, full_name: str | None = None
+    ) -> User:
+        user = self.get_user_by_invitation_token(db, token)
+        user.hashed_password = get_password_hash(password)
+        user.is_active = True
+        user.invitation_token = None
+        user.invitation_accepted_at = datetime.now(timezone.utc)
+        if full_name is not None and full_name.strip():
+            user.full_name = full_name.strip()
         db.add(user)
         db.commit()
         db.refresh(user)

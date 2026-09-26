@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { AppRoute, appRoutePaths, getRouteFromPath } from "./appRoutes";
 import { AppShell } from "./components/AppShell";
 import { DashboardPage } from "./pages/DashboardPage";
+import { SetupPasswordPage } from "./pages/SetupPasswordPage";
 
 export function App() {
   const [currentRoute, setCurrentRoute] = useState<AppRoute>(() =>
@@ -30,7 +31,11 @@ export function App() {
 
   return (
     <AppShell currentRoute={currentRoute} onNavigate={navigate}>
-      <DashboardPage currentRoute={currentRoute} />
+      {currentRoute === "setup-password" ? (
+        <SetupPasswordPage />
+      ) : (
+        <DashboardPage currentRoute={currentRoute} />
+      )}
     </AppShell>
   );
 }

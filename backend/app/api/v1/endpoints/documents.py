@@ -1,7 +1,8 @@
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_current_user, require_roles
+from app.core.exceptions import PropertyHubError
 from app.db.models.user import User
 from app.db.session import get_db
 from app.schemas.document import (
@@ -59,16 +60,17 @@ async def upload_document(
 )
 async def process_document_ocr(
     document_id: str,
-    background_tasks: BackgroundTasks,
     current_user: User = Depends(require_roles("owner", "manager")),
     db: Session = Depends(get_db),
 ) -> DocumentOcrResult:
     document = service.queue_ocr(db, current_user.organization_id, document_id)
-    background_tasks.add_task(
-        process_document_ocr_job,
-        current_user.organization_id,
-        document_id,
-    )
+    try:
+        process_document_ocr_job.delay(current_user.organization_id, document_id)
+    except Exception as exc:
+        service.mark_ocr_failed(
+            db, current_user.organization_id, document_id, f"Queueing failed: {exc}"
+        )
+        raise HTTPException(status_code=503, detail="OCR job could not be queued") from exc
     return DocumentOcrResult(document=document)
 
 
@@ -79,16 +81,17 @@ async def process_document_ocr(
 )
 async def retry_document_ocr(
     document_id: str,
-    background_tasks: BackgroundTasks,
     current_user: User = Depends(require_roles("owner", "manager")),
     db: Session = Depends(get_db),
 ) -> DocumentOcrResult:
     document = service.retry_ocr(db, current_user.organization_id, document_id)
-    background_tasks.add_task(
-        process_document_ocr_job,
-        current_user.organization_id,
-        document_id,
-    )
+    try:
+        process_document_ocr_job.delay(current_user.organization_id, document_id)
+    except Exception as exc:
+        service.mark_ocr_failed(
+            db, current_user.organization_id, document_id, f"Queueing failed: {exc}"
+        )
+        raise HTTPException(status_code=503, detail="OCR job could not be queued") from exc
     return DocumentOcrResult(document=document)
 
 

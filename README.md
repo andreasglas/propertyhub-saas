@@ -35,6 +35,8 @@ cp backend/.env.example backend/.env
 docker compose up --build
 ```
 
+Startet Backend, Frontend, PostgreSQL, Redis und einen Celery-Worker für OCR-Hintergrundjobs.
+
 ### Backend lokal
 
 ```bash
@@ -44,6 +46,12 @@ source .venv/bin/activate
 pip install -r requirements-dev.txt
 alembic upgrade head
 uvicorn app.main:app --reload
+```
+
+Optional in separatem Terminal für echte OCR-Queue-Verarbeitung:
+
+```bash
+celery -A app.tasks.celery_app.celery_app worker --loglevel=info -Q propertyhub.default
 ```
 
 ### Frontend lokal
@@ -68,6 +76,7 @@ Das Frontend nutzt im Development standardmäßig den relativen Pfad `/api`; lok
 - erster Dokumenten- und OCR-Testpfad für Rechnungsbelege
 - nutzbare Frontend-Bereiche für Immobilien, Einheiten, Mieter, Verträge, Billing, Banking und Dokumente
 - Admin-Bereiche für Organisationsdaten und Benutzerverwaltung mit Rollensteuerung
+- Einladungs- und Passwort-Setup-Flow für neue Benutzer
 - standardisierte Suche-, Filter- und Pagination-Muster für operative Listen im Dashboard
 
 ## Weiterführende Dokumentation

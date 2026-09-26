@@ -31,6 +31,21 @@ services:
     volumes:
       - ./backend:/app
 
+  worker:
+    build:
+      context: ./backend
+    command: celery -A app.tasks.celery_app.celery_app worker --loglevel=info -Q propertyhub.default
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./backend:/app
+
   frontend:
     build:
       context: ./frontend

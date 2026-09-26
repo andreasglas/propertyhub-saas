@@ -66,10 +66,12 @@ import {
   listUnits,
 } from "../services/unitService";
 import {
-  createUser,
+  inviteUser,
   listUsers,
   ManagedUser,
+  resendUserInvitation,
   updateUser,
+  UserInvitationResult,
 } from "../services/userAdminService";
 
 const defaultCredentials = {
@@ -310,6 +312,7 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
   const [bankTransactions, setBankTransactions] = useState<BankTransaction[]>([]);
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);
   const [report, setReport] = useState<DashboardReport | null>(null);
+  const [latestInvitation, setLatestInvitation] = useState<UserInvitationResult | null>(null);
 
   const [bankingActionLoading, setBankingActionLoading] = useState(false);
   const [documentActionLoading, setDocumentActionLoading] = useState(false);
@@ -502,10 +505,6 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
 
   async function handleSubmitUser(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!userForm.selected_user_id && !userForm.password) {
-      setLoadError("Für neue Benutzer ist ein Passwort erforderlich.");
-      return;
-    }
     try {
       if (userForm.selected_user_id) {
         await updateUser(userForm.selected_user_id, {
@@ -515,13 +514,12 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
           is_active: userForm.is_active === "true",
         });
       } else {
-        await createUser({
+        const invitation = await inviteUser({
           email: userForm.email,
           full_name: userForm.full_name || null,
-          password: userForm.password,
           role: userForm.role,
-          is_active: userForm.is_active === "true",
         });
+        setLatestInvitation(invitation);
       }
       setUserForm({
         selected_user_id: "",
@@ -534,6 +532,16 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
       await loadDashboardData();
     } catch {
       setLoadError("Benutzer konnte nicht gespeichert werden.");
+    }
+  }
+
+  async function handleResendInvitation(userId: string) {
+    try {
+      const invitation = await resendUserInvitation(userId);
+      setLatestInvitation(invitation);
+      await loadDashboardData();
+    } catch {
+      setLoadError("Einladung konnte nicht erneut versendet werden.");
     }
   }
 
@@ -1081,6 +1089,10 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
       title: "Immobilienverwaltung Dashboard",
       subtitle: "Zentrale Übersicht über Kennzahlen, Portfolio und letzte Vorgänge.",
     },
+    "setup-password": {
+      title: "Passwort festlegen",
+      subtitle: "Einladung annehmen und Zugang aktivieren.",
+    },
     organization: {
       title: "Organisation",
       subtitle: "Mandantendaten, Kontaktinformationen und Adresse der Organisation verwalten.",
@@ -1525,9 +1537,14 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
                       }
                     />
                     <TextField
-                      label={userForm.selected_user_id ? "Neues Passwort (optional)" : "Passwort"}
+                      label={
+                        userForm.selected_user_id
+                          ? "Neues Passwort (optional)"
+                          : "Passwort nur bei späterer Bearbeitung"
+                      }
                       type="password"
                       value={userForm.password}
+                      disabled={!userForm.selected_user_id}
                       onChange={(event) =>
                         setUserForm((current) => ({
                           ...current,
@@ -1566,10 +1583,17 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
                     </TextField>
                     <Box>
                       <Button type="submit" variant="contained">
-                        {userForm.selected_user_id ? "Benutzer speichern" : "Benutzer anlegen"}
+                        {userForm.selected_user_id ? "Benutzer speichern" : "Einladung erstellen"}
                       </Button>
                     </Box>
                   </Stack>
+                  {latestInvitation ? (
+                    <Alert severity="success" sx={{ mt: 2 }}>
+                      Einladung für {latestInvitation.user.email} erstellt:{" "}
+                      {window.location.origin}
+                      {latestInvitation.setup_path}
+                    </Alert>
+                  ) : null}
                 </CardContent>
               </Card>
             </Grid>
@@ -1594,18 +1618,39 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
                 searchLabel="E-Mail, Name oder Rolle"
                 helperText={
                   canManageUsers
-                    ? "Owner können neue Benutzer anlegen und bestehende Benutzer bearbeiten."
+                    ? "Owner können Einladungen erzeugen, Benutzer bearbeiten und ausstehende Einladungen erneut senden."
                     : "Manager können die Benutzerliste einsehen, aber keine Änderungen speichern."
                 }
                 renderPrimary={(user) => user.email}
                 renderSecondary={(user) =>
                   `${user.full_name ?? "-"} · ${user.role} · ${user.is_active ? "aktiv" : "inaktiv"}`
                 }
+                renderDetails={(user) => (
+                  <Typography color="text.secondary" variant="body2">
+                    Einladung:{" "}
+                    {user.invitation_accepted_at
+                      ? `angenommen am ${user.invitation_accepted_at}`
+                      : user.invitation_sent_at
+                        ? `offen seit ${user.invitation_sent_at}`
+                        : "keine"}
+                  </Typography>
+                )}
                 renderActions={(user) =>
                   canManageUsers ? (
-                    <Button size="small" variant="outlined" onClick={() => handleEditUser(user)}>
-                      Bearbeiten
-                    </Button>
+                    <Stack direction="row" spacing={1}>
+                      <Button size="small" variant="outlined" onClick={() => handleEditUser(user)}>
+                        Bearbeiten
+                      </Button>
+                      {!user.invitation_accepted_at ? (
+                        <Button
+                          size="small"
+                          variant="contained"
+                          onClick={() => void handleResendInvitation(user.id)}
+                        >
+                          Einladung senden
+                        </Button>
+                      ) : null}
+                    </Stack>
                   ) : null
                 }
               />

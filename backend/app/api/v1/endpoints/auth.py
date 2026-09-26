@@ -4,12 +4,16 @@ from sqlalchemy.orm import Session
 
 from app.core.security import create_access_token, verify_password
 from app.core.dependencies import get_current_user
+from app.core.exceptions import PropertyHubError
+from app.db.models.organization import Organization
 from app.db.models.user import User
 from app.db.session import get_db
-from app.schemas.user import Token, UserRead
+from app.schemas.user import InvitationInfo, SetupPasswordRequest, SetupPasswordResult, Token, UserRead
+from app.services.user_service import UserService
 from sqlalchemy import select
 
 router = APIRouter()
+service = UserService()
 
 
 @router.post("/token", response_model=Token)
@@ -38,3 +42,39 @@ async def get_authenticated_user(
     current_user: User = Depends(get_current_user),
 ) -> UserRead:
     return current_user
+
+
+@router.get("/invitations/{token}", response_model=InvitationInfo)
+async def get_invitation_details(
+    token: str,
+    db: Session = Depends(get_db),
+) -> InvitationInfo:
+    try:
+        user = service.get_user_by_invitation_token(db, token)
+    except PropertyHubError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
+
+    organization = db.scalar(
+        select(Organization).where(Organization.id == user.organization_id)
+    )
+    if organization is None:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    return InvitationInfo(
+        email=user.email,
+        full_name=user.full_name,
+        organization_name=organization.name,
+        role=user.role,
+    )
+
+
+@router.post("/setup-password", response_model=SetupPasswordResult)
+async def setup_password(
+    payload: SetupPasswordRequest,
+    db: Session = Depends(get_db),
+) -> SetupPasswordResult:
+    try:
+        service.accept_invitation(db, payload.token, payload.password, payload.full_name)
+    except PropertyHubError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
+    return SetupPasswordResult()

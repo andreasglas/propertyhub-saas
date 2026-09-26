@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     algorithm: str = "HS256"
     database_url: str = "sqlite:///./propertyhub.db"
     redis_url: str = "redis://localhost:6379/0"
+    celery_task_always_eager: bool = False
+    celery_task_eager_propagates: bool = False
     document_storage_dir: str = "./storage/documents"
     backend_cors_origins: list[str] = ["http://localhost:5173", "http://localhost:3000"]
     bootstrap_admin_email: str | None = None

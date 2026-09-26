@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+import secrets
 
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
@@ -25,6 +26,10 @@ def create_access_token(subject: str, expires_delta: timedelta | None = None) ->
     )
     payload = {"sub": subject, "exp": expire}
     return jwt.encode(payload, settings.secret_key, algorithm=settings.algorithm)
+
+
+def create_random_token(length: int = 32) -> str:
+    return secrets.token_urlsafe(length)
 
 
 def decode_access_token(token: str) -> dict[str, str]:

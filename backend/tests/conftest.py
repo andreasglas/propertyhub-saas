@@ -8,6 +8,8 @@ os.environ.setdefault("APP_ENV", "test")
 os.environ.setdefault("DATABASE_URL", "sqlite:///./test_propertyhub.db")
 os.environ.setdefault("DOCUMENT_STORAGE_DIR", "/tmp/propertyhub-test-documents")
 os.environ.setdefault("SECRET_KEY", "propertyhub-test-secret-key-000000")
+os.environ.setdefault("CELERY_TASK_ALWAYS_EAGER", "true")
+os.environ.setdefault("CELERY_TASK_EAGER_PROPAGATES", "true")
 os.environ.setdefault("BOOTSTRAP_ADMIN_EMAIL", "admin@example.com")
 os.environ.setdefault("BOOTSTRAP_ADMIN_PASSWORD", "test-password")
 os.environ.setdefault(

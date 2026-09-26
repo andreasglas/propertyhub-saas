@@ -1,3 +1,4 @@
+from app.tasks.celery_app import celery_app
 from app.db.session import SessionLocal
 from app.services.document_service import DocumentService
 from app.utils.logger import get_logger
@@ -5,6 +6,7 @@ from app.utils.logger import get_logger
 logger = get_logger(__name__)
 
 
+@celery_app.task(name="documents.process_document_ocr")
 def process_document_ocr_job(organization_id: str, document_id: str) -> None:
     service = DocumentService()
     try:

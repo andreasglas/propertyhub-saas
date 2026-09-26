@@ -35,6 +35,14 @@ Die Anmeldung validiert gegen Benutzer in der Datenbank. Für lokale Entwicklung
 
 Liefert den aktuell authentifizierten Benutzer inklusive Rolle für Frontend-Rechteprüfung und Navigation.
 
+### `GET /api/v1/auth/invitations/{token}`
+
+Liefert öffentliche Einladungsinformationen für den Passwort-Setup-Flow.
+
+### `POST /api/v1/auth/setup-password`
+
+Akzeptiert ein Einladungstoken und setzt das erste Passwort für einen eingeladenen Benutzer.
+
 ## Organisation
 
 ### `GET /api/v1/organization/me`
@@ -58,6 +66,14 @@ Legt einen neuen Benutzer in der aktuellen Organisation an. Nur `owner`.
 ### `PUT /api/v1/users/{user_id}`
 
 Aktualisiert Rolle, Aktivstatus, Name und optional Passwort eines Benutzers. Nur `owner`.
+
+### `POST /api/v1/users/invitations`
+
+Erstellt einen eingeladenen Benutzer ohne Passwort und liefert einen Setup-Link zurück. Nur `owner`.
+
+### `POST /api/v1/users/{user_id}/invite`
+
+Erzeugt für einen noch nicht aktivierten Benutzer einen neuen Einladungslink. Nur `owner`.
 
 ## Fachmodule
 
@@ -128,6 +144,7 @@ Alle Antworten liefern im Initial-Setup einen statusorientierten Payload, damit 
 - `POST /api/v1/documents/{document_id}/process-ocr` startet OCR jetzt asynchron und liefert `202 Accepted`.
 - `POST /api/v1/documents/{document_id}/retry-ocr` startet fehlgeschlagene OCR-Läufe erneut.
 - Dokumente enthalten OCR-Statusinformationen inkl. Fehlertext und Versuchszähler.
+- Für echte Hintergrundausführung nutzt OCR Celery mit Redis als Broker/Backend.
 - Der OCR-Pfad extrahiert erste Rechnungsdaten wie Lieferant, Rechnungsnummer, Rechnungsdatum und Bruttobetrag.
 
 ## Nächste API-Schritte

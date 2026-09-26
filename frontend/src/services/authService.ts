@@ -5,6 +5,13 @@ type TokenResponse = {
   token_type: string;
 };
 
+export type InvitationInfo = {
+  email: string;
+  full_name?: string | null;
+  organization_name: string;
+  role: string;
+};
+
 export type AuthUser = {
   id: string;
   organization_id: string;
@@ -30,5 +37,23 @@ export async function login(email: string, password: string) {
 
 export async function getCurrentUser() {
   const response = await apiClient.get<AuthUser>("/auth/me");
+  return response.data;
+}
+
+export async function getInvitationInfo(token: string) {
+  const response = await apiClient.get<InvitationInfo>(`/auth/invitations/${token}`);
+  return response.data;
+}
+
+export async function setupPassword(
+  token: string,
+  password: string,
+  full_name?: string | null,
+) {
+  const response = await apiClient.post<{ message: string }>("/auth/setup-password", {
+    token,
+    password,
+    full_name,
+  });
   return response.data;
 }

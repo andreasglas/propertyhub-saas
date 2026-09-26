@@ -3,6 +3,7 @@ from io import BytesIO
 from unittest.mock import patch
 
 from app.ml.invoice_ocr import extract_invoice_metadata
+from app.tasks.document_tasks import process_document_ocr_job
 from app.core.security import get_password_hash
 from app.db.models.property import Property
 from app.db.models.tenant import Tenant
@@ -186,6 +187,119 @@ def test_users_are_scoped_to_authenticated_organization(
         },
     )
     assert update_response.status_code == 404
+
+
+def test_user_invitation_and_password_setup_flow(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    invite_response = client.post(
+        "/api/v1/users/invitations",
+        headers=auth_headers,
+        json={
+            "email": "invitee@example.com",
+            "full_name": "Invitee User",
+            "role": "viewer",
+        },
+    )
+    assert invite_response.status_code == 201
+    invitation_payload = invite_response.json()
+    invitation_token = invitation_payload["invitation_token"]
+    assert invitation_payload["user"]["is_active"] is False
+    assert invitation_payload["setup_path"].endswith(invitation_token)
+
+    invitation_info_response = client.get(
+        f"/api/v1/auth/invitations/{invitation_token}"
+    )
+    assert invitation_info_response.status_code == 200
+    assert invitation_info_response.json()["email"] == "invitee@example.com"
+
+    setup_response = client.post(
+        "/api/v1/auth/setup-password",
+        json={
+            "token": invitation_token,
+            "password": "invitee-password",
+            "full_name": "Invitee Accepted",
+        },
+    )
+    assert setup_response.status_code == 200
+
+    login_response = client.post(
+        "/api/v1/auth/token",
+        data={"username": "invitee@example.com", "password": "invitee-password"},
+    )
+    assert login_response.status_code == 200
+
+
+def test_owner_can_resend_invitation_for_pending_user(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    invite_response = client.post(
+        "/api/v1/users/invitations",
+        headers=auth_headers,
+        json={
+            "email": "resend@example.com",
+            "full_name": "Resend User",
+            "role": "manager",
+        },
+    )
+    first_token = invite_response.json()["invitation_token"]
+    user_id = invite_response.json()["user"]["id"]
+
+    resend_response = client.post(
+        f"/api/v1/users/{user_id}/invite",
+        headers=auth_headers,
+    )
+    assert resend_response.status_code == 200
+    second_token = resend_response.json()["invitation_token"]
+    assert second_token != first_token
+
+
+def test_document_ocr_endpoint_queues_celery_task(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    invoice_response = client.post(
+        "/api/v1/invoices/",
+        headers=auth_headers,
+        json={
+            "property_id": None,
+            "vendor_name": "Queue Vendor",
+            "invoice_number": None,
+            "invoice_date": None,
+            "gross_amount": 10,
+            "status": "received",
+        },
+    )
+    invoice_id = invoice_response.json()["id"]
+
+    upload_response = client.post(
+        "/api/v1/documents/upload",
+        headers=auth_headers,
+        data={
+            "related_model": "invoice",
+            "related_id": invoice_id,
+            "document_type": "invoice_receipt",
+        },
+        files={
+            "file": (
+                "queue.txt",
+                BytesIO(b"Vendor: Queue GmbH"),
+                "text/plain",
+            )
+        },
+    )
+    document_id = upload_response.json()["id"]
+
+    with patch.object(process_document_ocr_job, "delay") as mocked_delay:
+        mocked_delay.return_value = None
+        queue_response = client.post(
+            f"/api/v1/documents/{document_id}/process-ocr",
+            headers=auth_headers,
+        )
+
+    assert queue_response.status_code == 202
+    mocked_delay.assert_called_once_with(
+        "00000000-0000-0000-0000-000000000001", document_id
+    )
 
 
 def test_viewer_role_is_read_only(
