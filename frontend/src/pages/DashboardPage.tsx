@@ -1,10 +1,16 @@
 import { ChangeEvent, FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
+import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
+import HourglassTopIcon from "@mui/icons-material/HourglassTop";
 import {
   Alert,
   Box,
   Button,
   Card,
   CardContent,
+  Chip,
+  Divider,
   Grid,
   List,
   ListItem,
@@ -180,6 +186,25 @@ function formatPropertyLocation(property: Property) {
   return parts.length ? parts.join(" · ") : "Keine Adressdaten";
 }
 
+function formatStatusLabel(value: string) {
+  return value.replaceAll("_", " ").replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+function getStatusChipColor(
+  status: string,
+): "default" | "success" | "warning" | "error" | "info" | "secondary" {
+  if (["processed", "paid", "approved", "active", "matched", "occupied"].includes(status)) {
+    return "success";
+  }
+  if (["queued", "processing", "pending", "received", "draft", "reserved"].includes(status)) {
+    return "warning";
+  }
+  if (["failed", "inactive", "vacant"].includes(status)) {
+    return "error";
+  }
+  return "default";
+}
+
 function ManagedListCard<T>({
   title,
   items,
@@ -213,9 +238,12 @@ function ManagedListCard<T>({
             justifyContent="space-between"
           >
             <div>
-              <Typography variant="h6">{title}</Typography>
+              <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                <Typography variant="h6">{title}</Typography>
+                <Chip label={`${items.length} Treffer`} size="small" color="primary" variant="outlined" />
+              </Stack>
               <Typography color="text.secondary" variant="body2">
-                {items.length} Einträge nach Filter
+                Einheitliche Suche, Filter und Paginierung für diese Ansicht.
               </Typography>
             </div>
             <Stack
@@ -258,7 +286,18 @@ function ManagedListCard<T>({
               <ListItem
                 key={index}
                 disableGutters
-                sx={{ alignItems: "flex-start", flexDirection: "column", gap: 1.5 }}
+                sx={{
+                  alignItems: "flex-start",
+                  flexDirection: "column",
+                  gap: 1.5,
+                  px: 2,
+                  py: 1.5,
+                  border: "1px solid",
+                  borderColor: "divider",
+                  borderRadius: 3,
+                  mb: 1.5,
+                  bgcolor: "background.paper",
+                }}
               >
                 <ListItemText
                   primary={renderPrimary(item)}
@@ -1197,15 +1236,48 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
     },
   ];
   const pageTitle = pageTitles[currentRoute];
+  const invitationUrl = latestInvitation
+    ? `${window.location.origin}${latestInvitation.setup_path}`
+    : null;
+
+  async function handleCopyInvitationLink() {
+    if (!invitationUrl) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(invitationUrl);
+    } catch {
+      setLoadError("Einladungslink konnte nicht in die Zwischenablage kopiert werden.");
+    }
+  }
 
   return (
     <Stack spacing={3}>
-      <div>
-        <Typography variant="h4" gutterBottom>
-          {pageTitle.title}
-        </Typography>
-        <Typography color="text.secondary">{pageTitle.subtitle}</Typography>
-      </div>
+      <Card>
+        <CardContent>
+          <Stack
+            direction={{ xs: "column", md: "row" }}
+            spacing={2}
+            alignItems={{ xs: "flex-start", md: "center" }}
+            justifyContent="space-between"
+          >
+            <Box>
+              <Typography variant="h4" gutterBottom>
+                {pageTitle.title}
+              </Typography>
+              <Typography color="text.secondary">{pageTitle.subtitle}</Typography>
+            </Box>
+            <Stack direction="row" spacing={1} flexWrap="wrap">
+              <Chip
+                label={`Organisation: ${organization?.name ?? currentUser.organization_id}`}
+                color="primary"
+                variant="outlined"
+              />
+              <Chip label={`Rolle: ${currentUser.role}`} color="secondary" variant="filled" />
+            </Stack>
+          </Stack>
+        </CardContent>
+      </Card>
 
       {loadError ? <Alert severity="error">{loadError}</Alert> : null}
       {loading ? <Alert severity="info">Daten werden geladen...</Alert> : null}
@@ -1226,6 +1298,7 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
                     <Typography color="text.secondary" variant="body2">
                       {kpi.label}
                     </Typography>
+                    <Divider sx={{ my: 1.5 }} />
                     <Typography variant="h5" sx={{ mt: 1 }}>
                       {kpi.value}
                     </Typography>
@@ -1588,10 +1661,23 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
                     </Box>
                   </Stack>
                   {latestInvitation ? (
-                    <Alert severity="success" sx={{ mt: 2 }}>
-                      Einladung für {latestInvitation.user.email} erstellt:{" "}
-                      {window.location.origin}
-                      {latestInvitation.setup_path}
+                    <Alert
+                      severity="success"
+                      sx={{ mt: 2 }}
+                      action={
+                        <Button
+                          color="inherit"
+                          size="small"
+                          startIcon={<ContentCopyIcon />}
+                          onClick={() => void handleCopyInvitationLink()}
+                        >
+                          Link kopieren
+                        </Button>
+                      }
+                    >
+                      Einladung für {latestInvitation.user.email} erstellt.
+                      <br />
+                      {invitationUrl}
                     </Alert>
                   ) : null}
                 </CardContent>
@@ -1626,14 +1712,22 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
                   `${user.full_name ?? "-"} · ${user.role} · ${user.is_active ? "aktiv" : "inaktiv"}`
                 }
                 renderDetails={(user) => (
-                  <Typography color="text.secondary" variant="body2">
-                    Einladung:{" "}
-                    {user.invitation_accepted_at
-                      ? `angenommen am ${user.invitation_accepted_at}`
-                      : user.invitation_sent_at
-                        ? `offen seit ${user.invitation_sent_at}`
-                        : "keine"}
-                  </Typography>
+                  <Stack direction="row" spacing={1} flexWrap="wrap" alignItems="center">
+                    <Chip
+                      size="small"
+                      color={user.is_active ? "success" : "default"}
+                      label={user.is_active ? "Aktiv" : "Inaktiv"}
+                    />
+                    <Chip size="small" variant="outlined" label={formatStatusLabel(user.role)} />
+                    <Typography color="text.secondary" variant="body2">
+                      Einladung:{" "}
+                      {user.invitation_accepted_at
+                        ? `angenommen am ${user.invitation_accepted_at}`
+                        : user.invitation_sent_at
+                          ? `offen seit ${user.invitation_sent_at}`
+                          : "keine"}
+                    </Typography>
+                  </Stack>
                 )}
                 renderActions={(user) =>
                   canManageUsers ? (
@@ -2865,6 +2959,23 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
               }
               renderDetails={(document) =>
                 <Stack spacing={1}>
+                  <Stack direction="row" spacing={1} flexWrap="wrap">
+                    <Chip
+                      size="small"
+                      color={getStatusChipColor(document.ocr_status)}
+                      icon={
+                        document.ocr_status === "processed" ? (
+                          <CheckCircleOutlineIcon />
+                        ) : document.ocr_status === "failed" ? (
+                          <ErrorOutlineIcon />
+                        ) : (
+                          <HourglassTopIcon />
+                        )
+                      }
+                      label={formatStatusLabel(document.ocr_status)}
+                    />
+                    <Chip size="small" variant="outlined" label={formatStatusLabel(document.related_model)} />
+                  </Stack>
                   {document.ocr_status === "failed" && document.ocr_error ? (
                     <Alert severity="error" sx={{ width: "100%" }}>
                       OCR fehlgeschlagen: {document.ocr_error}
