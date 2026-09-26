@@ -66,6 +66,11 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
   const [bankingActionLoading, setBankingActionLoading] = useState(false);
   const [documentActionLoading, setDocumentActionLoading] = useState(false);
   const [selectedDocumentFile, setSelectedDocumentFile] = useState<File | null>(null);
+  const [documentFilter, setDocumentFilter] = useState({
+    ocr_status: "all",
+    related_model: "all",
+    search: "",
+  });
   const [entryForm, setEntryForm] = useState({
     property_id: "",
     entry_type: "expense",
@@ -199,6 +204,24 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
     () => entries.reduce((sum, entry) => sum + entry.amount, 0),
     [entries],
   );
+  const filteredDocuments = useMemo(() => {
+    return documents.filter((document) => {
+      const matchesStatus =
+        documentFilter.ocr_status === "all" || document.ocr_status === documentFilter.ocr_status;
+      const matchesModel =
+        documentFilter.related_model === "all" ||
+        document.related_model === documentFilter.related_model;
+      const matchesSearch =
+        !documentFilter.search ||
+        document.file_name.toLowerCase().includes(documentFilter.search.toLowerCase()) ||
+        (document.ocr_result?.vendor_name &&
+          String(document.ocr_result.vendor_name)
+            .toLowerCase()
+            .includes(documentFilter.search.toLowerCase()));
+
+      return matchesStatus && matchesModel && matchesSearch;
+    });
+  }, [documentFilter, documents]);
   const pageTitles: Record<AppRoute, { title: string; subtitle: string }> = {
     overview: {
       title: "Immobilienverwaltung Dashboard",
@@ -1009,14 +1032,64 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
           <Grid item xs={12} md={canManageData ? 7 : 12}>
             <Card>
               <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  Dokumente
-                </Typography>
+                <Stack
+                  direction={{ xs: "column", md: "row" }}
+                  spacing={2}
+                  sx={{ mb: 2 }}
+                  alignItems={{ xs: "stretch", md: "center" }}
+                >
+                  <Typography variant="h6" sx={{ minWidth: 140 }}>
+                    Dokumente
+                  </Typography>
+                  <TextField
+                    select
+                    size="small"
+                    label="OCR-Status"
+                    value={documentFilter.ocr_status}
+                    onChange={(event) =>
+                      setDocumentFilter((current) => ({
+                        ...current,
+                        ocr_status: event.target.value,
+                      }))
+                    }
+                  >
+                    <MenuItem value="all">Alle Stati</MenuItem>
+                    <MenuItem value="pending">Pending</MenuItem>
+                    <MenuItem value="processed">Processed</MenuItem>
+                  </TextField>
+                  <TextField
+                    select
+                    size="small"
+                    label="Bezug"
+                    value={documentFilter.related_model}
+                    onChange={(event) =>
+                      setDocumentFilter((current) => ({
+                        ...current,
+                        related_model: event.target.value,
+                      }))
+                    }
+                  >
+                    <MenuItem value="all">Alle Bezüge</MenuItem>
+                    <MenuItem value="invoice">Invoice</MenuItem>
+                    <MenuItem value="property">Property</MenuItem>
+                  </TextField>
+                  <TextField
+                    size="small"
+                    label="Suche"
+                    value={documentFilter.search}
+                    onChange={(event) =>
+                      setDocumentFilter((current) => ({
+                        ...current,
+                        search: event.target.value,
+                      }))
+                    }
+                  />
+                </Stack>
                 <List dense>
-                  {documents.map((document) => (
-                    <ListItem
-                      key={document.id}
-                      disableGutters
+                {filteredDocuments.map((document) => (
+                  <ListItem
+                    key={document.id}
+                    disableGutters
                       sx={{ alignItems: "flex-start", flexDirection: "column", gap: 1.5 }}
                     >
                       <ListItemText
@@ -1054,9 +1127,9 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
                       ) : null}
                     </ListItem>
                   ))}
-                  {!documents.length ? (
+                {!filteredDocuments.length ? (
                     <Typography color="text.secondary">
-                      Noch keine Dokumente vorhanden.
+                    Keine Dokumente für den aktuellen Filter vorhanden.
                     </Typography>
                   ) : null}
                 </List>
