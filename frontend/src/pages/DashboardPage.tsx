@@ -39,6 +39,7 @@ import {
   DocumentRecord,
   listDocuments,
   processDocumentOcr,
+  retryDocumentOcr,
   uploadDocument,
 } from "../services/documentService";
 import { createInvoice, Invoice, listInvoices } from "../services/invoiceService";
@@ -645,10 +646,27 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
     setDocumentActionLoading(true);
     setLoadError(null);
     try {
-      await processDocumentOcr(documentId);
-      await loadDashboardData();
+      const queuedDocument = await processDocumentOcr(documentId);
+      setDocuments((current) =>
+        current.map((document) => (document.id === documentId ? queuedDocument : document)),
+      );
     } catch {
       setLoadError("OCR-Verarbeitung konnte nicht gestartet werden.");
+    } finally {
+      setDocumentActionLoading(false);
+    }
+  }
+
+  async function handleRetryDocument(documentId: string) {
+    setDocumentActionLoading(true);
+    setLoadError(null);
+    try {
+      const queuedDocument = await retryDocumentOcr(documentId);
+      setDocuments((current) =>
+        current.map((document) => (document.id === documentId ? queuedDocument : document)),
+      );
+    } catch {
+      setLoadError("OCR-Verarbeitung konnte nicht erneut gestartet werden.");
     } finally {
       setDocumentActionLoading(false);
     }
@@ -746,6 +764,10 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
         ]),
       ),
     [payments],
+  );
+  const hasRunningOcrJobs = useMemo(
+    () => documents.some((document) => ["queued", "processing"].includes(document.ocr_status)),
+    [documents],
   );
 
   const propertyOptions = properties.map((property) => ({
@@ -903,11 +925,26 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
           document.ocr_result?.vendor_name,
           document.ocr_result?.invoice_number,
           document.ocr_result?.gross_amount,
+          document.ocr_error,
         ]);
         return matchesStatus && matchesModel && matchesDocumentSearch;
       }),
     [documentList.ocr_status, documentList.related_model, documentList.search, documents],
   );
+
+  useEffect(() => {
+    if (!isAuthenticated || currentRoute !== "documents" || !hasRunningOcrJobs) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      void loadDashboardData();
+    }, 2000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [currentRoute, hasRunningOcrJobs, isAuthenticated]);
 
   const pageTitles: Record<AppRoute, { title: string; subtitle: string }> = {
     overview: {
@@ -2325,6 +2362,9 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
                   >
                     <MenuItem value="all">Alle Stati</MenuItem>
                     <MenuItem value="pending">Pending</MenuItem>
+                    <MenuItem value="queued">Queued</MenuItem>
+                    <MenuItem value="processing">Processing</MenuItem>
+                    <MenuItem value="failed">Failed</MenuItem>
                     <MenuItem value="processed">Processed</MenuItem>
                   </TextField>
                   <TextField
@@ -2349,32 +2389,72 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
               }
               renderPrimary={(document) => `${document.file_name} · ${document.document_type}`}
               renderSecondary={(document) =>
-                `Status: ${document.ocr_status} · Bezug: ${document.related_model}`
+                `Status: ${document.ocr_status} · Bezug: ${document.related_model} · Versuche: ${document.ocr_attempt_count}`
               }
               renderDetails={(document) =>
-                document.ocr_result ? (
-                  <Typography color="text.secondary" variant="body2">
-                    OCR: {String(document.ocr_result.vendor_name ?? "-")} ·{" "}
-                    {String(document.ocr_result.invoice_number ?? "-")} ·{" "}
-                    {String(document.ocr_result.gross_amount ?? "-")}
-                  </Typography>
-                ) : (
-                  <Typography color="text.secondary" variant="body2">
-                    Noch keine OCR-Daten vorhanden.
-                  </Typography>
-                )
+                <Stack spacing={1}>
+                  {document.ocr_status === "failed" && document.ocr_error ? (
+                    <Alert severity="error" sx={{ width: "100%" }}>
+                      OCR fehlgeschlagen: {document.ocr_error}
+                    </Alert>
+                  ) : null}
+                  {document.ocr_status === "queued" ? (
+                    <Typography color="text.secondary" variant="body2">
+                      OCR ist in der Warteschlange und wird automatisch verarbeitet.
+                    </Typography>
+                  ) : null}
+                  {document.ocr_status === "processing" ? (
+                    <Typography color="text.secondary" variant="body2">
+                      OCR wird gerade verarbeitet.
+                    </Typography>
+                  ) : null}
+                  {document.ocr_result ? (
+                    <Typography color="text.secondary" variant="body2">
+                      OCR: {String(document.ocr_result.vendor_name ?? "-")} ·{" "}
+                      {String(document.ocr_result.invoice_number ?? "-")} ·{" "}
+                      {String(document.ocr_result.gross_amount ?? "-")}
+                    </Typography>
+                  ) : document.ocr_status === "pending" ? (
+                    <Typography color="text.secondary" variant="body2">
+                      OCR wurde noch nicht gestartet.
+                    </Typography>
+                  ) : null}
+                </Stack>
               }
               renderActions={(document) =>
                 canManageData ? (
                   <Stack direction="row" spacing={1}>
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      onClick={() => void handleProcessDocument(document.id)}
-                      disabled={documentActionLoading}
-                    >
-                      OCR testen
-                    </Button>
+                    {document.ocr_status === "failed" ? (
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        color="error"
+                        onClick={() => void handleRetryDocument(document.id)}
+                        disabled={documentActionLoading}
+                      >
+                        Erneut versuchen
+                      </Button>
+                    ) : (
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() => void handleProcessDocument(document.id)}
+                        disabled={
+                          documentActionLoading ||
+                          document.ocr_status === "queued" ||
+                          document.ocr_status === "processing" ||
+                          document.ocr_status === "processed"
+                        }
+                      >
+                        {document.ocr_status === "queued"
+                          ? "In Warteschlange"
+                          : document.ocr_status === "processing"
+                            ? "Wird verarbeitet"
+                            : document.ocr_status === "processed"
+                              ? "Bereits verarbeitet"
+                              : "OCR starten"}
+                      </Button>
+                    )}
                     {document.related_model === "invoice" && document.ocr_result ? (
                       <Button
                         size="small"

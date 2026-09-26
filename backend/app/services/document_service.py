@@ -48,6 +48,16 @@ class DocumentService:
         )
         return list(db.scalars(statement))
 
+    def _resolve_document_path(self, document: Document) -> Path:
+        if not document.storage_path:
+            raise PropertyHubError("Document storage path missing", status_code=400)
+
+        file_path = Path(document.storage_path)
+        if not file_path.exists():
+            raise PropertyHubError("Document file not found", status_code=404)
+
+        return file_path
+
     def get_document(self, db: Session, organization_id: str, document_id: str) -> Document:
         document = db.scalar(
             select(Document).where(
@@ -91,23 +101,67 @@ class DocumentService:
             file_name=safe_name,
             storage_path=str(target_path),
             ocr_status="pending",
+            ocr_attempt_count=0,
         )
         db.add(document)
         db.commit()
         db.refresh(document)
         return document
 
-    def process_ocr(self, db: Session, organization_id: str, document_id: str) -> Document:
+    def queue_ocr(self, db: Session, organization_id: str, document_id: str) -> Document:
         document = self.get_document(db, organization_id, document_id)
-        if not document.storage_path:
-            raise PropertyHubError("Document storage path missing", status_code=400)
+        if document.ocr_status in {"queued", "processing"}:
+            raise PropertyHubError("OCR processing is already in progress", status_code=409)
 
-        file_path = Path(document.storage_path)
-        if not file_path.exists():
-            raise PropertyHubError("Document file not found", status_code=404)
+        document.ocr_status = "queued"
+        document.ocr_error = None
+        document.ocr_started_at = None
+        document.ocr_processed_at = None
+        document.ocr_result = None
+        db.add(document)
+        db.commit()
+        db.refresh(document)
+        return document
+
+    def retry_ocr(self, db: Session, organization_id: str, document_id: str) -> Document:
+        document = self.get_document(db, organization_id, document_id)
+        if document.ocr_status != "failed":
+            raise PropertyHubError("Only failed OCR jobs can be retried", status_code=400)
+
+        return self.queue_ocr(db, organization_id, document_id)
+
+    def start_ocr_processing(
+        self, db: Session, organization_id: str, document_id: str
+    ) -> Document:
+        document = self.get_document(db, organization_id, document_id)
+        document.ocr_status = "processing"
+        document.ocr_error = None
+        document.ocr_started_at = datetime.now(timezone.utc)
+        document.ocr_attempt_count += 1
+        db.add(document)
+        db.commit()
+        db.refresh(document)
+        return document
+
+    def mark_ocr_failed(
+        self, db: Session, organization_id: str, document_id: str, error_message: str
+    ) -> Document:
+        document = self.get_document(db, organization_id, document_id)
+        document.ocr_status = "failed"
+        document.ocr_error = error_message[:1000]
+        document.ocr_processed_at = None
+        db.add(document)
+        db.commit()
+        db.refresh(document)
+        return document
+
+    def process_ocr(self, db: Session, organization_id: str, document_id: str) -> Document:
+        document = self.start_ocr_processing(db, organization_id, document_id)
+        file_path = self._resolve_document_path(document)
 
         result = extract_invoice_metadata(document.file_name, file_path.read_bytes())
         document.ocr_status = "processed"
+        document.ocr_error = None
         document.ocr_result = result
         document.ocr_processed_at = datetime.now(timezone.utc)
         db.add(document)

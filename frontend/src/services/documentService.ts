@@ -9,6 +9,9 @@ export type DocumentRecord = {
   file_name: string;
   storage_path?: string | null;
   ocr_status: string;
+  ocr_error?: string | null;
+  ocr_attempt_count: number;
+  ocr_started_at?: string | null;
   ocr_result?: Record<string, string | number | null> | null;
   ocr_processed_at?: string | null;
 };
@@ -41,6 +44,13 @@ export async function uploadDocument(payload: {
 export async function processDocumentOcr(documentId: string) {
   const response = await apiClient.post<{ document: DocumentRecord }>(
     `/documents/${documentId}/process-ocr`,
+  );
+  return response.data.document;
+}
+
+export async function retryDocumentOcr(documentId: string) {
+  const response = await apiClient.post<{ document: DocumentRecord }>(
+    `/documents/${documentId}/retry-ocr`,
   );
   return response.data.document;
 }

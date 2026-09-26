@@ -1546,8 +1546,13 @@ def test_documents_upload_and_process_ocr(
         f"/api/v1/documents/{document_id}/process-ocr",
         headers=auth_headers,
     )
-    assert ocr_response.status_code == 200
-    processed_document = ocr_response.json()["document"]
+    assert ocr_response.status_code == 202
+    queued_document = ocr_response.json()["document"]
+    assert queued_document["ocr_status"] == "queued"
+
+    detail_response = client.get(f"/api/v1/documents/{document_id}", headers=auth_headers)
+    assert detail_response.status_code == 200
+    processed_document = detail_response.json()
     assert processed_document["ocr_status"] == "processed"
     assert processed_document["ocr_result"]["vendor_name"] == "ACME GmbH"
     assert processed_document["ocr_result"]["invoice_number"] == "INV-2026-001"
@@ -1682,7 +1687,7 @@ def test_document_ocr_can_be_applied_to_invoice(
         f"/api/v1/documents/{document_id}/process-ocr",
         headers=auth_headers,
     )
-    assert process_response.status_code == 200
+    assert process_response.status_code == 202
 
     apply_response = client.post(
         f"/api/v1/documents/{document_id}/apply-ocr-to-invoice",
@@ -1771,12 +1776,97 @@ def test_documents_pdf_upload_and_process_ocr(
         f"/api/v1/documents/{document_id}/process-ocr",
         headers=auth_headers,
     )
-    assert ocr_response.status_code == 200
-    processed_document = ocr_response.json()["document"]
+    assert ocr_response.status_code == 202
+    detail_response = client.get(f"/api/v1/documents/{document_id}", headers=auth_headers)
+    processed_document = detail_response.json()
     assert processed_document["ocr_result"]["vendor_name"] == "PDF Vendor GmbH"
     assert processed_document["ocr_result"]["invoice_number"] == "PDF-2026-88"
     assert processed_document["ocr_result"]["gross_amount"] == 555.4
     assert processed_document["ocr_result"]["source"] == "pdf_text"
+
+
+def test_document_ocr_failure_is_persisted_and_can_be_retried(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    invoice_response = client.post(
+        "/api/v1/invoices/",
+        headers=auth_headers,
+        json={
+            "property_id": None,
+            "vendor_name": "Retry Vendor",
+            "invoice_number": None,
+            "invoice_date": None,
+            "gross_amount": 50,
+            "status": "received",
+        },
+    )
+    invoice_id = invoice_response.json()["id"]
+
+    upload_response = client.post(
+        "/api/v1/documents/upload",
+        headers=auth_headers,
+        data={
+            "related_model": "invoice",
+            "related_id": invoice_id,
+            "document_type": "invoice_receipt",
+        },
+        files={
+            "file": (
+                "retry.txt",
+                BytesIO(b"Vendor: Retry GmbH"),
+                "text/plain",
+            )
+        },
+    )
+    document_id = upload_response.json()["id"]
+
+    with patch(
+        "app.services.document_service.extract_invoice_metadata",
+        side_effect=RuntimeError("OCR engine unavailable"),
+    ):
+        first_process_response = client.post(
+            f"/api/v1/documents/{document_id}/process-ocr",
+            headers=auth_headers,
+        )
+
+    assert first_process_response.status_code == 202
+    failed_detail_response = client.get(
+        f"/api/v1/documents/{document_id}", headers=auth_headers
+    )
+    failed_document = failed_detail_response.json()
+    assert failed_document["ocr_status"] == "failed"
+    assert failed_document["ocr_error"] == "OCR engine unavailable"
+    assert failed_document["ocr_attempt_count"] == 1
+
+    with patch(
+        "app.services.document_service.extract_invoice_metadata",
+        return_value={
+            "vendor_name": "Retry Success GmbH",
+            "invoice_number": "RETRY-1",
+            "invoice_date": "2026-09-26",
+            "gross_amount": 123.45,
+            "confidence": 1.0,
+            "source": "content",
+            "status": "processed",
+        },
+    ):
+        retry_response = client.post(
+            f"/api/v1/documents/{document_id}/retry-ocr",
+            headers=auth_headers,
+        )
+
+    assert retry_response.status_code == 202
+    retried_document = retry_response.json()["document"]
+    assert retried_document["ocr_status"] == "queued"
+
+    processed_detail_response = client.get(
+        f"/api/v1/documents/{document_id}", headers=auth_headers
+    )
+    processed_document = processed_detail_response.json()
+    assert processed_document["ocr_status"] == "processed"
+    assert processed_document["ocr_error"] is None
+    assert processed_document["ocr_attempt_count"] == 2
+    assert processed_document["ocr_result"]["vendor_name"] == "Retry Success GmbH"
 
 
 def test_image_ocr_path_can_extract_invoice_fields() -> None:

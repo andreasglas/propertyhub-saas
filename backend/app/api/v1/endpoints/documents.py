@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, File, Form, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_current_user, require_roles
@@ -10,6 +10,7 @@ from app.schemas.document import (
     DocumentRead,
 )
 from app.services.document_service import DocumentService
+from app.tasks.document_tasks import process_document_ocr_job
 
 router = APIRouter()
 service = DocumentService()
@@ -51,13 +52,43 @@ async def upload_document(
     )
 
 
-@router.post("/{document_id}/process-ocr", response_model=DocumentOcrResult)
+@router.post(
+    "/{document_id}/process-ocr",
+    response_model=DocumentOcrResult,
+    status_code=status.HTTP_202_ACCEPTED,
+)
 async def process_document_ocr(
     document_id: str,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(require_roles("owner", "manager")),
     db: Session = Depends(get_db),
 ) -> DocumentOcrResult:
-    document = service.process_ocr(db, current_user.organization_id, document_id)
+    document = service.queue_ocr(db, current_user.organization_id, document_id)
+    background_tasks.add_task(
+        process_document_ocr_job,
+        current_user.organization_id,
+        document_id,
+    )
+    return DocumentOcrResult(document=document)
+
+
+@router.post(
+    "/{document_id}/retry-ocr",
+    response_model=DocumentOcrResult,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def retry_document_ocr(
+    document_id: str,
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(require_roles("owner", "manager")),
+    db: Session = Depends(get_db),
+) -> DocumentOcrResult:
+    document = service.retry_ocr(db, current_user.organization_id, document_id)
+    background_tasks.add_task(
+        process_document_ocr_job,
+        current_user.organization_id,
+        document_id,
+    )
     return DocumentOcrResult(document=document)
 
 

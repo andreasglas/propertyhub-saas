@@ -15,6 +15,9 @@ class DocumentRead(BaseModel):
     file_name: str
     storage_path: str | None = None
     ocr_status: str
+    ocr_error: str | None = None
+    ocr_attempt_count: int
+    ocr_started_at: datetime | None = None
     ocr_result: dict[str, Any] | None = None
     ocr_processed_at: datetime | None = None
 

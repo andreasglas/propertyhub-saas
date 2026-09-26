@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, JSON, String
+from sqlalchemy import DateTime, Integer, JSON, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.models.base import TenantScopedModel
@@ -15,5 +15,10 @@ class Document(TenantScopedModel):
     file_name: Mapped[str] = mapped_column(String(255), nullable=False)
     storage_path: Mapped[str | None] = mapped_column(String(500))
     ocr_status: Mapped[str] = mapped_column(String(50), nullable=False, default="pending")
+    ocr_error: Mapped[str | None] = mapped_column(Text)
+    ocr_attempt_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    ocr_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     ocr_result: Mapped[dict | None] = mapped_column(JSON)
     ocr_processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

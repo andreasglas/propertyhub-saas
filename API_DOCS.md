@@ -101,6 +101,9 @@ Alle Antworten liefern im Initial-Setup einen statusorientierten Payload, damit 
   - PDF mit eingebettetem Text
   - JPG/JPEG/PNG per Bild-OCR
   - TXT als Entwicklungs-/Fallbackformat
+- `POST /api/v1/documents/{document_id}/process-ocr` startet OCR jetzt asynchron und liefert `202 Accepted`.
+- `POST /api/v1/documents/{document_id}/retry-ocr` startet fehlgeschlagene OCR-Läufe erneut.
+- Dokumente enthalten OCR-Statusinformationen inkl. Fehlertext und Versuchszähler.
 - Der OCR-Pfad extrahiert erste Rechnungsdaten wie Lieferant, Rechnungsnummer, Rechnungsdatum und Bruttobetrag.
 
 ## Nächste API-Schritte
