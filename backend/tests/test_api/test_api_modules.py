@@ -1,6 +1,8 @@
 from fastapi.testclient import TestClient
 from io import BytesIO
+from unittest.mock import patch
 
+from app.ml.invoice_ocr import extract_invoice_metadata
 from app.core.security import get_password_hash
 from app.db.models.property import Property
 from app.db.models.tenant import Tenant
@@ -1694,3 +1696,100 @@ def test_document_ocr_can_be_applied_to_invoice(
     assert payload["invoice"]["invoice_date"] == "2026-09-01"
     assert payload["invoice"]["gross_amount"] == 777.7
     assert payload["invoice"]["status"] == "received"
+
+
+def test_documents_pdf_upload_and_process_ocr(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    invoice_response = client.post(
+        "/api/v1/invoices/",
+        headers=auth_headers,
+        json={
+            "property_id": None,
+            "vendor_name": "PDF Vendor",
+            "invoice_number": None,
+            "invoice_date": None,
+            "gross_amount": 10,
+            "status": "draft",
+        },
+    )
+    invoice_id = invoice_response.json()["id"]
+
+    pdf_lines = [
+        "Vendor: PDF Vendor GmbH",
+        "Invoice Number: PDF-2026-88",
+        "Invoice Date: 2026-09-26",
+        "Gross Amount: 555.40",
+    ]
+    content_stream = "BT\n/F1 12 Tf\n72 720 Td\n" + "\n".join(
+        [f"({line}) Tj\n0 -20 Td" for line in pdf_lines]
+    ) + "\nET"
+
+    objects = [
+        "<< /Type /Catalog /Pages 2 0 R >>",
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
+        f"<< /Length {len(content_stream.encode('latin-1'))} >>\nstream\n{content_stream}\nendstream",
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    ]
+    pdf_buffer = BytesIO()
+    pdf_buffer.write(b"%PDF-1.4\n")
+    offsets = [0]
+    for index, obj in enumerate(objects, start=1):
+        offsets.append(pdf_buffer.tell())
+        pdf_buffer.write(f"{index} 0 obj\n{obj}\nendobj\n".encode("latin-1"))
+    xref_offset = pdf_buffer.tell()
+    pdf_buffer.write(f"xref\n0 {len(objects) + 1}\n".encode("latin-1"))
+    pdf_buffer.write(b"0000000000 65535 f \n")
+    for offset in offsets[1:]:
+        pdf_buffer.write(f"{offset:010d} 00000 n \n".encode("latin-1"))
+    pdf_buffer.write(
+        f"trailer\n<< /Root 1 0 R /Size {len(objects) + 1} >>\nstartxref\n{xref_offset}\n%%EOF".encode(
+            "latin-1"
+        )
+    )
+
+    upload_response = client.post(
+        "/api/v1/documents/upload",
+        headers=auth_headers,
+        data={
+            "related_model": "invoice",
+            "related_id": invoice_id,
+            "document_type": "invoice_receipt",
+        },
+        files={
+            "file": (
+                "invoice-pdf.pdf",
+                BytesIO(pdf_buffer.getvalue()),
+                "application/pdf",
+            )
+        },
+    )
+    document_id = upload_response.json()["id"]
+
+    ocr_response = client.post(
+        f"/api/v1/documents/{document_id}/process-ocr",
+        headers=auth_headers,
+    )
+    assert ocr_response.status_code == 200
+    processed_document = ocr_response.json()["document"]
+    assert processed_document["ocr_result"]["vendor_name"] == "PDF Vendor GmbH"
+    assert processed_document["ocr_result"]["invoice_number"] == "PDF-2026-88"
+    assert processed_document["ocr_result"]["gross_amount"] == 555.4
+    assert processed_document["ocr_result"]["source"] == "pdf_text"
+
+
+def test_image_ocr_path_can_extract_invoice_fields() -> None:
+    png_signature_only = b"\x89PNG\r\n\x1a\n"
+    with patch("app.ml.invoice_ocr._ocr_image_bytes") as mock_ocr:
+        mock_ocr.return_value = (
+            "Vendor: Image Vendor GmbH\nInvoice Number: IMG-77\nInvoice Date: 2026-10-01\nGross Amount: 333.90",
+            True,
+        )
+        result = extract_invoice_metadata("receipt.png", png_signature_only)
+
+    assert result["vendor_name"] == "Image Vendor GmbH"
+    assert result["invoice_number"] == "IMG-77"
+    assert result["invoice_date"] == "2026-10-01"
+    assert result["gross_amount"] == 333.9
+    assert result["source"] == "image_ocr"

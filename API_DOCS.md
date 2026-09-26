@@ -97,7 +97,11 @@ Alle Antworten liefern im Initial-Setup einen statusorientierten Payload, damit 
 ## Dokumente und OCR
 
 - Dokumente können aktuell zu `invoice` oder `property` hochgeladen werden.
-- Der OCR-Endpunkt ist im aktuellen Slice bewusst als pragmatischer Demo-/Entwicklungspfad umgesetzt und extrahiert erste Rechnungsdaten aus Dateiname oder Textinhalt.
+- Der OCR-Endpunkt unterstützt aktuell pragmatisch:
+  - PDF mit eingebettetem Text
+  - JPG/JPEG/PNG per Bild-OCR
+  - TXT als Entwicklungs-/Fallbackformat
+- Der OCR-Pfad extrahiert erste Rechnungsdaten wie Lieferant, Rechnungsnummer, Rechnungsdatum und Bruttobetrag.
 
 ## Nächste API-Schritte
 

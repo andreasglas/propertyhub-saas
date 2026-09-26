@@ -1007,12 +1007,20 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
                     </TextField>
                     <Button variant="outlined" component="label">
                       Datei auswählen
-                      <input hidden type="file" onChange={handleDocumentFileChange} />
+                      <input
+                        hidden
+                        type="file"
+                        accept=".pdf,.png,.jpg,.jpeg,.txt"
+                        onChange={handleDocumentFileChange}
+                      />
                     </Button>
                     <Typography color="text.secondary" variant="body2">
                       {selectedDocumentFile
                         ? `Ausgewählt: ${selectedDocumentFile.name}`
-                        : "Zum Testen funktioniert besonders gut eine .txt-Datei mit Feldern wie Vendor, Invoice Number, Invoice Date und Gross Amount."}
+                        : "Unterstützt für den Testlauf: PDF sowie PNG/JPG/JPEG. TXT bleibt nur ein einfacher Fallback für Entwicklung und Debugging."}
+                    </Typography>
+                    <Typography color="text.secondary" variant="body2">
+                      Bestes Ergebnis: PDF mit eingebettetem Text oder gut lesbarer Rechnungs-Scan.
                     </Typography>
                     <Box>
                       <Button

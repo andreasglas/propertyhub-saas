@@ -1,5 +1,13 @@
+from io import BytesIO
 from pathlib import Path
 import re
+
+from PIL import Image, ImageOps
+from pypdf import PdfReader
+import pypdfium2 as pdfium
+import pytesseract
+
+IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".webp"}
 
 
 def _extract_first(patterns: list[str], text: str) -> str | None:
@@ -10,10 +18,81 @@ def _extract_first(patterns: list[str], text: str) -> str | None:
     return None
 
 
-def extract_invoice_metadata(file_name: str, content: bytes | None = None) -> dict[str, str | float | None]:
-    text = ""
-    if content:
-        text = content.decode("utf-8", errors="ignore")
+def _decode_text_content(content: bytes | None) -> str:
+    if not content:
+        return ""
+    return content.decode("utf-8", errors="ignore")
+
+
+def _extract_pdf_text(content: bytes | None) -> str:
+    if not content:
+        return ""
+
+    reader = PdfReader(BytesIO(content))
+    return "\n".join(filter(None, (page.extract_text() or "" for page in reader.pages)))
+
+
+def _ocr_image_bytes(content: bytes | None) -> tuple[str, bool]:
+    if not content:
+        return "", False
+    try:
+        image = Image.open(BytesIO(content))
+        image = ImageOps.grayscale(image)
+        text = pytesseract.image_to_string(image, config="--psm 6")
+        return text, True
+    except pytesseract.TesseractNotFoundError:
+        return "", False
+
+
+def _ocr_pdf_bytes(content: bytes | None, max_pages: int = 2) -> tuple[str, bool]:
+    if not content:
+        return "", False
+
+    try:
+        document = pdfium.PdfDocument(BytesIO(content))
+        texts: list[str] = []
+        try:
+            for page_index in range(min(len(document), max_pages)):
+                page = document[page_index]
+                bitmap = page.render(scale=2)
+                image = bitmap.to_pil()
+                image = ImageOps.grayscale(image)
+                texts.append(pytesseract.image_to_string(image, config="--psm 6"))
+                page.close()
+        finally:
+            document.close()
+        return "\n".join(filter(None, texts)), True
+    except pytesseract.TesseractNotFoundError:
+        return "", False
+
+
+def _extract_text_for_file(file_name: str, content: bytes | None) -> tuple[str, str]:
+    suffix = Path(file_name).suffix.lower()
+
+    if suffix == ".pdf":
+        pdf_text = _extract_pdf_text(content)
+        if pdf_text.strip():
+            return pdf_text, "pdf_text"
+
+        ocr_text, ocr_available = _ocr_pdf_bytes(content)
+        if ocr_text.strip():
+            return ocr_text, "pdf_ocr"
+        return "", "pdf_ocr_unavailable" if not ocr_available else "pdf_empty"
+
+    if suffix in IMAGE_EXTENSIONS:
+        ocr_text, ocr_available = _ocr_image_bytes(content)
+        if ocr_text.strip():
+            return ocr_text, "image_ocr"
+        return "", "image_ocr_unavailable" if not ocr_available else "image_empty"
+
+    text = _decode_text_content(content)
+    return text, "content" if text.strip() else "filename"
+
+
+def extract_invoice_metadata(
+    file_name: str, content: bytes | None = None
+) -> dict[str, str | float | None]:
+    text, source = _extract_text_for_file(file_name, content)
 
     vendor_name = _extract_first(
         [
@@ -61,6 +140,6 @@ def extract_invoice_metadata(file_name: str, content: bytes | None = None) -> di
         "invoice_date": invoice_date,
         "gross_amount": gross_amount,
         "confidence": confidence,
-        "source": "content" if text.strip() else "filename",
+        "source": source,
         "status": "processed",
     }
