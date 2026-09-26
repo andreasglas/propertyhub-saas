@@ -97,7 +97,7 @@ def print_access_summary() -> None:
     print()
     print("Bootstrap-Login:")
     print(f"  E-Mail:       {admin_email}")
-    print(f"  Passwort:     {admin_password}")
+    print("  Passwort:     Wert aus backend/.env (BOOTSTRAP_ADMIN_PASSWORD)")
 
     if secret_key == "replace-with-a-strong-32-character-secret":
         print()
