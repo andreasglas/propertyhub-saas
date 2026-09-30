@@ -107,9 +107,22 @@ Die folgenden Module sind als strukturierte Einstiegspunkte vorhanden:
 - `DELETE /api/v1/contracts/{contract_id}`
 - `GET /api/v1/tasks/`
 - `POST /api/v1/tasks/`
+- `GET /api/v1/tasks/templates`
+- `POST /api/v1/tasks/templates`
+- `PUT /api/v1/tasks/templates/{template_id}`
+- `DELETE /api/v1/tasks/templates/{template_id}`
+- `POST /api/v1/tasks/templates/generate-due`
 - `GET /api/v1/tasks/{task_id}`
 - `PUT /api/v1/tasks/{task_id}`
 - `DELETE /api/v1/tasks/{task_id}`
+- `GET /api/v1/tasks/{task_id}/comments`
+- `POST /api/v1/tasks/{task_id}/comments`
+- `GET /api/v1/tasks/{task_id}/attachments`
+- `GET /api/v1/tasks/{task_id}/history`
+- `GET /api/v1/vendors/`
+- `POST /api/v1/vendors/`
+- `PUT /api/v1/vendors/{vendor_id}`
+- `DELETE /api/v1/vendors/{vendor_id}`
 - `GET /api/v1/invoices/`
 - `POST /api/v1/invoices/`
 - `GET /api/v1/invoices/overdue`
@@ -171,9 +184,21 @@ Alle Antworten liefern im Initial-Setup einen statusorientierten Payload, damit 
 ## Aufgaben und Tickets
 
 - Aufgaben sind mandantenfähig und können optional auf Immobilie und Einheit referenzieren.
+- Aufgaben können zusätzlich einem Dienstleister sowie einer wiederkehrenden Vorlage zugeordnet werden.
 - Unterstützte Kategorien sind aktuell `maintenance`, `inspection`, `tenant_request`, `accounting`, `compliance` und `other`.
 - Status und Priorität werden organisationsbezogen verwaltet und im Audit-Log protokolliert.
+- `GET /api/v1/tasks/{task_id}/comments` und `POST /api/v1/tasks/{task_id}/comments` bilden den Kommunikationsverlauf je Vorgang ab.
+- `GET /api/v1/tasks/{task_id}/attachments` liefert aufgabenbezogene Dokumente aus dem bestehenden Dokumentenmodul.
+- `GET /api/v1/tasks/{task_id}/history` kombiniert Audit-Events, Kommentare und Anhänge zu einer operativen Verlaufssicht.
+- `GET /api/v1/tasks/templates` bis `DELETE /api/v1/tasks/templates/{template_id}` verwalten wiederkehrende Aufgabenmuster.
+- `POST /api/v1/tasks/templates/generate-due` erzeugt fällige Aufgaben aus aktiven Vorlagen.
 - `viewer` kann Aufgaben lesen, aber nicht anlegen, aktualisieren oder löschen.
+
+## Dienstleister
+
+- Dienstleister sind mandantenfähig und dienen als Stammdaten für Handwerker, Servicepartner und externe Ansprechpartner.
+- `GET /api/v1/vendors/`, `POST /api/v1/vendors/`, `PUT /api/v1/vendors/{vendor_id}` und `DELETE /api/v1/vendors/{vendor_id}` verwalten Name, Kategorie, Kontakt- und Notizdaten.
+- Aufgaben können optional mit einem Dienstleister verknüpft werden, um Zuständigkeiten im Dashboard sichtbar zu machen.
 
 ## Nebenkosten und Betriebskosten
 
@@ -187,7 +212,7 @@ Alle Antworten liefern im Initial-Setup einen statusorientierten Payload, damit 
 
 ## Dokumente und OCR
 
-- Dokumente können aktuell zu `invoice` oder `property` hochgeladen werden.
+- - Dokumente können aktuell zu `invoice`, `property` oder `task` hochgeladen werden.
 - Dokumente enthalten jetzt zusätzlich Review-Metadaten wie Kategorie, Version, Freigabestatus, Kommentar und Reviewer.
 - Der OCR-Endpunkt unterstützt aktuell pragmatisch:
   - PDF mit eingebettetem Text

@@ -117,6 +117,9 @@ Das Frontend nutzt im Development standardmäßig den relativen Pfad `/api`; lok
 - Nebenkostenperioden und Betriebskostenpositionen pro Immobilie mit Verteilungsvorschau nach Fläche oder Einheit
 - finale Nebenkostenabrechnung mit CSV-/PDF-Export, erweiterten Umlageschlüsseln sowie Leerstands-/Teiljahreslogik
 - Aufgaben- und Ticketmodul für Wartungen, Prüfungen und operative Vorgänge mit Objekt-/Einheitenbezug
+- Dienstleisterverwaltung für Handwerker und Servicepartner mit Aufgaben-Zuordnung
+- Aufgabenkommentare, Historie und Dokumentanhänge für echte Wartungs-Workflows
+- wiederkehrende Aufgabenvorlagen mit manueller Erzeugung fälliger Vorgänge
 - standardisierte Suche-, Filter- und Pagination-Muster für operative Listen im Dashboard
 
 ## Erweiterte Backend-Konfiguration
