@@ -120,6 +120,7 @@ Das Frontend nutzt im Development standardmäßig den relativen Pfad `/api`; lok
 - Dienstleisterverwaltung für Handwerker und Servicepartner mit Aufgaben-Zuordnung
 - Aufgabenkommentare, Historie und Dokumentanhänge für echte Wartungs-Workflows
 - wiederkehrende Aufgabenvorlagen mit manueller Erzeugung fälliger Vorgänge
+- automatisierte Erzeugung fälliger wiederkehrender Aufgaben per Celery Beat Scheduler
 - standardisierte Suche-, Filter- und Pagination-Muster für operative Listen im Dashboard
 
 ## Erweiterte Backend-Konfiguration
@@ -139,6 +140,16 @@ SMTP_USE_SSL=false
 ```
 
 Ohne SMTP bleibt der Invite-/Reminder-Flow lokal nutzbar und markiert Sendungen automatisch als `manual`.
+
+Für automatische wiederkehrende Aufgaben kann der Scheduler in `/home/runner/work/propertyhub-saas/propertyhub-saas/backend/.env` gesteuert werden:
+
+```env
+RECURRING_TASK_GENERATION_ENABLED=true
+RECURRING_TASK_GENERATION_HOUR=6
+RECURRING_TASK_GENERATION_MINUTE=0
+```
+
+Im Docker-Setup läuft dafür zusätzlich der `scheduler`-Service mit Celery Beat.
 
 ## Weiterführende Dokumentation
 

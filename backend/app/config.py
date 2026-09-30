@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     celery_task_always_eager: bool = False
     celery_task_eager_propagates: bool = False
+    recurring_task_generation_enabled: bool = True
+    recurring_task_generation_hour: int = 6
+    recurring_task_generation_minute: int = 0
     document_storage_dir: str = "./storage/documents"
     frontend_app_url: str = "http://localhost:5173"
     backend_cors_origins: list[str] = ["http://localhost:5173", "http://localhost:3000"]

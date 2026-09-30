@@ -277,6 +277,27 @@ class TaskService:
             db.refresh(task)
         return generated_tasks
 
+    def generate_due_tasks_for_all_organizations(
+        self, db: Session, *, today: date | None = None
+    ) -> dict[str, int]:
+        reference_date = today or date.today()
+        organization_ids = list(
+            db.scalars(
+                select(TaskTemplate.organization_id)
+                .where(
+                    TaskTemplate.active.is_(True),
+                    TaskTemplate.next_due_date <= reference_date,
+                )
+                .distinct()
+            )
+        )
+        generated_counts: dict[str, int] = {}
+        for organization_id in organization_ids:
+            generated_tasks = self.generate_due_tasks(db, organization_id, today=reference_date)
+            if generated_tasks:
+                generated_counts[organization_id] = len(generated_tasks)
+        return generated_counts
+
     def _validate_relations(self, db: Session, organization_id: str, payload: dict) -> dict:
         payload = self._validate_template_relations(db, organization_id, payload)
         recurring_template_id = payload.get("recurring_template_id")

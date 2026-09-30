@@ -192,6 +192,7 @@ Alle Antworten liefern im Initial-Setup einen statusorientierten Payload, damit 
 - `GET /api/v1/tasks/{task_id}/history` kombiniert Audit-Events, Kommentare und Anhänge zu einer operativen Verlaufssicht.
 - `GET /api/v1/tasks/templates` bis `DELETE /api/v1/tasks/templates/{template_id}` verwalten wiederkehrende Aufgabenmuster.
 - `POST /api/v1/tasks/templates/generate-due` erzeugt fällige Aufgaben aus aktiven Vorlagen.
+- Zusätzlich erzeugt ein täglicher Celery-Beat-Lauf fällige wiederkehrende Aufgaben automatisch für alle Organisationen mit aktiven Vorlagen.
 - `viewer` kann Aufgaben lesen, aber nicht anlegen, aktualisieren oder löschen.
 
 ## Dienstleister

@@ -5,10 +5,14 @@ from unittest.mock import patch
 
 from pypdf import PdfReader
 
+from app.db.models.organization import Organization
 from app.ml.invoice_ocr import extract_invoice_metadata
+from app.tasks.task_tasks import generate_due_recurring_tasks_job
 from app.tasks.document_tasks import process_document_ocr_job
 from app.core.security import get_password_hash
 from app.db.models.property import Property
+from app.db.models.task import Task
+from app.db.models.task_template import TaskTemplate
 from app.db.models.tenant import Tenant
 from app.db.models.unit import Unit
 from app.db.models.user import User
@@ -3142,3 +3146,60 @@ def test_document_review_metadata_can_be_updated(
     assert payload["review_status"] == "approved"
     assert payload["review_notes"] == "Vollstaendig geprueft"
     assert payload["reviewed_by"] is not None
+
+
+def test_recurring_task_generation_job_creates_due_tasks_for_all_organizations() -> None:
+    today = date.today()
+    with SessionLocal() as db:
+        db.add(
+            Organization(
+                id="00000000-0000-0000-0000-000000000099",
+                name="Andere Organisation",
+                country="Deutschland",
+            )
+        )
+        db.add_all(
+            [
+                TaskTemplate(
+                    organization_id="00000000-0000-0000-0000-000000000001",
+                    title="Heizung prüfen",
+                    category="maintenance",
+                    priority="medium",
+                    recurrence_frequency="monthly",
+                    next_due_date=today,
+                    active=True,
+                ),
+                TaskTemplate(
+                    organization_id="00000000-0000-0000-0000-000000000099",
+                    title="Treppenhaus prüfen",
+                    category="inspection",
+                    priority="high",
+                    recurrence_frequency="weekly",
+                    next_due_date=today,
+                    active=True,
+                ),
+                TaskTemplate(
+                    organization_id="00000000-0000-0000-0000-000000000099",
+                    title="Nicht fällig",
+                    category="inspection",
+                    priority="low",
+                    recurrence_frequency="monthly",
+                    next_due_date=today + timedelta(days=10),
+                    active=True,
+                ),
+            ]
+        )
+        db.commit()
+
+    summary = generate_due_recurring_tasks_job()
+
+    assert summary["generated_count"] == 2
+    assert summary["organization_counts"]["00000000-0000-0000-0000-000000000001"] == 1
+    assert summary["organization_counts"]["00000000-0000-0000-0000-000000000099"] == 1
+
+    with SessionLocal() as db:
+        generated_tasks = list(db.query(Task).filter(Task.source == "recurring"))
+        assert len(generated_tasks) == 2
+        template_titles = {task.title for task in generated_tasks}
+        assert "Heizung prüfen" in template_titles
+        assert "Treppenhaus prüfen" in template_titles
