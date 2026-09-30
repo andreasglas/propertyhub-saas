@@ -114,6 +114,7 @@ Das Frontend nutzt im Development standardmäßig den relativen Pfad `/api`; lok
 - Fälligkeiten, offene Posten, Reminder-Historie und CSV-Reporte für Rechnungen
 - Dokumenten-Review mit Kategorie-, Versions- und Freigabe-Metadaten
 - Audit-Log für wichtige Mutationen sowie Activity-Feed im Dashboard
+- Nebenkostenperioden und Betriebskostenpositionen pro Immobilie mit Verteilungsvorschau nach Fläche oder Einheit
 - standardisierte Suche-, Filter- und Pagination-Muster für operative Listen im Dashboard
 
 ## Erweiterte Backend-Konfiguration

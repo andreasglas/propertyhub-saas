@@ -142,6 +142,15 @@ Die folgenden Module sind als strukturierte Einstiegspunkte vorhanden:
 - `GET /api/v1/reports/export/dashboard.csv`
 - `GET /api/v1/reports/export/open-invoices.csv`
 - `GET /api/v1/audit-logs/`
+- `GET /api/v1/operating-costs/periods`
+- `POST /api/v1/operating-costs/periods`
+- `PUT /api/v1/operating-costs/periods/{period_id}`
+- `DELETE /api/v1/operating-costs/periods/{period_id}`
+- `GET /api/v1/operating-costs/periods/{period_id}/items`
+- `POST /api/v1/operating-costs/periods/{period_id}/items`
+- `PUT /api/v1/operating-costs/items/{item_id}`
+- `DELETE /api/v1/operating-costs/items/{item_id}`
+- `GET /api/v1/operating-costs/periods/{period_id}/settlement-preview`
 
 Der Reporting-Endpunkt liefert aktuell eine Dashboard-Zusammenfassung mit Zählern und Summen für Immobilien, Verträge, Rechnungen, Zahlungen und Accounting Entries. Zusätzlich gibt es jetzt eine offene-Posten-Liste sowie CSV-Exporte für Dashboard-Summary und offene Rechnungen.
 
@@ -150,6 +159,13 @@ Wichtige Mutationen in Organisation, Benutzerverwaltung, Stammdaten, Billing, Ba
 Schreiboperationen sind aktuell auf die Rollen `owner` und `manager` beschränkt; `viewer` bleibt read-only.
 
 Alle Antworten liefern im Initial-Setup einen statusorientierten Payload, damit die Endpunkte früh integrierbar sind und später schrittweise mit Geschäftslogik hinterlegt werden können.
+
+## Nebenkosten und Betriebskosten
+
+- Nebenkostenperioden sind immobilienbezogen und mandantenfähig.
+- Positionen innerhalb einer Periode unterstützen aktuell die Umlageschlüssel `area` und `unit_count`.
+- Die Abrechnungsvorschau berücksichtigt überlappende aktive Verträge, vorhandene Wohnflächen und hinterlegte Vorauszahlungen aus dem Mietvertrag.
+- `GET /api/v1/operating-costs/periods/{period_id}/settlement-preview` liefert eine Vorschau je Vertrag/Wohneinheit mit Kostenanteil, geleisteter Vorauszahlung und Saldo.
 
 ## Dokumente und OCR
 
