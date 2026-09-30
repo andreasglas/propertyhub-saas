@@ -2909,6 +2909,11 @@ def test_tasks_crud_scoping_and_permissions(
     assert attachments_response.status_code == 200
     assert attachments_response.json()[0]["file_name"] == "auftrag.txt"
 
+    task_report_response = client.get("/api/v1/reports/tasks", headers=auth_headers)
+    assert task_report_response.status_code == 200
+    report_task = next(item for item in task_report_response.json() if item["task_id"] == task_id)
+    assert report_task["vendor_name"] == "Wärme Service GmbH"
+
     history_response = client.get(
         f"/api/v1/tasks/{task_id}/history",
         headers=auth_headers,
@@ -3143,6 +3148,28 @@ def test_overdue_invoices_reminders_and_report_exports(
     assert reminder_list_response.status_code == 200
     assert reminder_list_response.json()[0]["recipient_email"] == "tenant@example.com"
 
+    task_response = client.post(
+        "/api/v1/tasks/",
+        headers=auth_headers,
+        json={
+            "property_id": None,
+            "unit_id": None,
+            "vendor_id": None,
+            "title": "Überfällige Rechnung",
+            "description": "Mit Rechnungserinnerung abstimmen",
+            "category": "accounting",
+            "priority": "high",
+            "status": "open",
+            "due_date": (date.today() - timedelta(days=5)).isoformat(),
+            "estimated_cost": 25,
+            "actual_cost": None,
+            "assignee_name": "Backoffice",
+            "completion_notes": None,
+            "source": "manual",
+        },
+    )
+    assert task_response.status_code == 201
+
     open_invoices_response = client.get("/api/v1/reports/open-invoices", headers=auth_headers)
     assert open_invoices_response.status_code == 200
     report_row = next(item for item in open_invoices_response.json() if item["invoice_id"] == invoice_id)
@@ -3153,6 +3180,18 @@ def test_overdue_invoices_reminders_and_report_exports(
     )
     assert open_invoices_csv_response.status_code == 200
     assert "REM-2026-01" in open_invoices_csv_response.text
+
+    tasks_report_response = client.get("/api/v1/reports/tasks", headers=auth_headers)
+    assert tasks_report_response.status_code == 200
+    task_report_row = next(
+        item for item in tasks_report_response.json() if item["title"] == "Überfällige Rechnung"
+    )
+    assert task_report_row["days_overdue"] >= 5
+
+    tasks_csv_response = client.get("/api/v1/reports/export/tasks.csv", headers=auth_headers)
+    assert tasks_csv_response.status_code == 200
+    assert "task_id,title,property_name,unit_name,vendor_name,category,priority,status" in tasks_csv_response.text
+    assert "Überfällige Rechnung" in tasks_csv_response.text
 
     dashboard_csv_response = client.get(
         "/api/v1/reports/export/dashboard.csv", headers=auth_headers

@@ -74,7 +74,7 @@ import {
   Property,
   listProperties,
 } from "../services/propertyService";
-import { DashboardReport, getDashboardReport } from "../services/reportService";
+import { DashboardReport, downloadTaskReportCsv, getDashboardReport } from "../services/reportService";
 import {
   createTask,
   createTaskComment,
@@ -1121,6 +1121,16 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
       await loadDashboardData();
     } catch {
       setLoadError("Wiederkehrende Aufgaben konnten nicht erzeugt werden.");
+    }
+  }
+
+  async function handleDownloadTaskReport() {
+    setLoadError(null);
+    try {
+      const file = await downloadTaskReportCsv();
+      triggerBlobDownload(file, "tasks-report.csv");
+    } catch {
+      setLoadError("Aufgabenreport konnte nicht als CSV exportiert werden.");
     }
   }
 
@@ -3765,9 +3775,14 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
                       mb={2}
                     >
                       <Typography variant="h6">Wiederkehrende Aufgaben</Typography>
-                      <Button variant="outlined" onClick={() => void handleGenerateDueTasks()}>
-                        Fällige Aufgaben erzeugen
-                      </Button>
+                      <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+                        <Button variant="outlined" onClick={() => void handleDownloadTaskReport()}>
+                          Aufgabenreport CSV
+                        </Button>
+                        <Button variant="outlined" onClick={() => void handleGenerateDueTasks()}>
+                          Fällige Aufgaben erzeugen
+                        </Button>
+                      </Stack>
                     </Stack>
                     <Stack component="form" spacing={2} onSubmit={handleCreateTaskTemplate}>
                       <TextField

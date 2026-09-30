@@ -31,3 +31,20 @@ class OpenInvoiceReportRow(BaseModel):
     status: str
     days_overdue: int
     latest_reminder_level: int = 0
+
+
+class TaskReportRow(BaseModel):
+    task_id: str
+    title: str
+    property_name: str | None = None
+    unit_name: str | None = None
+    vendor_name: str | None = None
+    category: str
+    priority: str
+    status: str
+    due_date: str | None = None
+    completed_at: str | None = None
+    estimated_cost: float | None = None
+    actual_cost: float | None = None
+    days_overdue: int
+    source: str

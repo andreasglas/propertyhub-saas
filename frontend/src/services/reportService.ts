@@ -24,3 +24,10 @@ export async function getDashboardReport() {
   const response = await apiClient.get<DashboardReport>("/reports/");
   return response.data;
 }
+
+export async function downloadTaskReportCsv() {
+  const response = await apiClient.get<Blob>("/reports/export/tasks.csv", {
+    responseType: "blob",
+  });
+  return response.data;
+}

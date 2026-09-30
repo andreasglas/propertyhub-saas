@@ -14,7 +14,8 @@ from app.db.models.property import Property
 from app.db.models.task import Task
 from app.db.models.tenant import Tenant
 from app.db.models.unit import Unit
-from app.schemas.report import DashboardReportRead, OpenInvoiceReportRow
+from app.db.models.vendor import Vendor
+from app.schemas.report import DashboardReportRead, OpenInvoiceReportRow, TaskReportRow
 
 
 class ReportService:
@@ -189,6 +190,81 @@ class ReportService:
                 "status",
                 "days_overdue",
                 "latest_reminder_level",
+            ]
+        )
+        for row in rows:
+            writer.writerow(list(row.model_dump().values()))
+        return output.getvalue()
+
+    def list_tasks_report(
+        self, db: Session, organization_id: str, *, reference_date: date | None = None
+    ) -> list[TaskReportRow]:
+        today = reference_date or date.today()
+        tasks = list(
+            db.scalars(
+                select(Task)
+                .where(Task.organization_id == organization_id)
+                .order_by(Task.due_date.asc().nullslast(), Task.created_at.desc())
+            )
+        )
+        property_names = {
+            property_.id: property_.name
+            for property_ in db.scalars(
+                select(Property).where(Property.organization_id == organization_id)
+            )
+        }
+        unit_names = {
+            unit.id: unit.name
+            for unit in db.scalars(select(Unit).where(Unit.organization_id == organization_id))
+        }
+        vendor_names = {
+            vendor.id: vendor.name
+            for vendor in db.scalars(select(Vendor).where(Vendor.organization_id == organization_id))
+        }
+        rows: list[TaskReportRow] = []
+        for task in tasks:
+            days_overdue = 0
+            if task.due_date and task.status in {"open", "in_progress", "blocked"} and task.due_date < today:
+                days_overdue = (today - task.due_date).days
+            rows.append(
+                TaskReportRow(
+                    task_id=task.id,
+                    title=task.title,
+                    property_name=property_names.get(task.property_id or ""),
+                    unit_name=unit_names.get(task.unit_id or ""),
+                    vendor_name=vendor_names.get(task.vendor_id or ""),
+                    category=task.category,
+                    priority=task.priority,
+                    status=task.status,
+                    due_date=task.due_date.isoformat() if task.due_date else None,
+                    completed_at=task.completed_at.isoformat() if task.completed_at else None,
+                    estimated_cost=float(task.estimated_cost) if task.estimated_cost is not None else None,
+                    actual_cost=float(task.actual_cost) if task.actual_cost is not None else None,
+                    days_overdue=days_overdue,
+                    source=task.source,
+                )
+            )
+        return rows
+
+    def export_tasks_csv(self, rows: list[TaskReportRow]) -> str:
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(
+            [
+                "task_id",
+                "title",
+                "property_name",
+                "unit_name",
+                "vendor_name",
+                "category",
+                "priority",
+                "status",
+                "due_date",
+                "completed_at",
+                "estimated_cost",
+                "actual_cost",
+                "days_overdue",
+                "source",
             ]
         )
         for row in rows:

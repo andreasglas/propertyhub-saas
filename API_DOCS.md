@@ -157,8 +157,10 @@ Die folgenden Module sind als strukturierte Einstiegspunkte vorhanden:
 - `DELETE /api/v1/accounting/{entry_id}`
 - `GET /api/v1/reports/`
 - `GET /api/v1/reports/open-invoices`
+- `GET /api/v1/reports/tasks`
 - `GET /api/v1/reports/export/dashboard.csv`
 - `GET /api/v1/reports/export/open-invoices.csv`
+- `GET /api/v1/reports/export/tasks.csv`
 - `GET /api/v1/audit-logs/`
 - `GET /api/v1/operating-costs/periods`
 - `POST /api/v1/operating-costs/periods`
@@ -195,6 +197,11 @@ Alle Antworten liefern im Initial-Setup einen statusorientierten Payload, damit 
 - `POST /api/v1/tasks/templates/generate-due` erzeugt fällige Aufgaben aus aktiven Vorlagen.
 - Zusätzlich erzeugt ein täglicher Celery-Beat-Lauf fällige wiederkehrende Aufgaben automatisch für alle Organisationen mit aktiven Vorlagen.
 - `viewer` kann Aufgaben lesen, aber nicht anlegen, aktualisieren oder löschen.
+
+## Aufgabenreporting
+
+- `GET /api/v1/reports/tasks` liefert eine operative Aufgabenliste mit Objekt-, Einheiten- und Dienstleisterbezug, Fälligkeit, Kosten und Überfälligkeitstagen.
+- `GET /api/v1/reports/export/tasks.csv` exportiert dieselben Aufgabenkennzahlen als CSV für Controlling und Dienstleistersteuerung.
 
 ## Dienstleister
 
