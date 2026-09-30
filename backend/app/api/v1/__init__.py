@@ -13,6 +13,7 @@ from app.api.v1.endpoints import (
     payments,
     properties,
     reports,
+    tasks,
     tenants,
     units,
     users,
@@ -27,6 +28,7 @@ api_router.include_router(properties.router, prefix="/properties", tags=["proper
 api_router.include_router(tenants.router, prefix="/tenants", tags=["tenants"])
 api_router.include_router(units.router, prefix="/units", tags=["units"])
 api_router.include_router(contracts.router, prefix="/contracts", tags=["contracts"])
+api_router.include_router(tasks.router, prefix="/tasks", tags=["tasks"])
 api_router.include_router(invoices.router, prefix="/invoices", tags=["invoices"])
 api_router.include_router(
     operating_costs.router, prefix="/operating-costs", tags=["operating-costs"]

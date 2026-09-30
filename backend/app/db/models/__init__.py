@@ -9,6 +9,7 @@ from app.db.models.operating_cost_period import OperatingCostPeriod
 from app.db.models.payment import Payment
 from app.db.models.payment_reminder import PaymentReminder
 from app.db.models.property import Property
+from app.db.models.task import Task
 from app.db.models.tenant import Tenant
 from app.db.models.unit import Unit
 from app.db.models.user import User
@@ -25,6 +26,7 @@ __all__ = [
     "Payment",
     "PaymentReminder",
     "Property",
+    "Task",
     "Tenant",
     "Unit",
     "User",

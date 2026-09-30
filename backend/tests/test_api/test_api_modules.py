@@ -2690,6 +2690,186 @@ def test_operating_cost_preview_supports_vacancy_partial_year_and_advanced_alloc
     assert vacancy_line["balance_amount"] == 142.5
 
 
+def test_tasks_crud_scoping_and_permissions(
+    client: TestClient, auth_headers: dict[str, str], viewer_auth_headers: dict[str, str]
+) -> None:
+    property_response = client.post(
+        "/api/v1/properties/",
+        headers=auth_headers,
+        json={
+            "name": "Serviceobjekt Berlin",
+            "property_type": "residential",
+            "street": "Serviceweg 7",
+            "postal_code": "10115",
+            "city": "Berlin",
+            "purchase_price": 420000,
+        },
+    )
+    property_id = property_response.json()["id"]
+
+    unit_response = client.post(
+        "/api/v1/units/",
+        headers=auth_headers,
+        json={
+            "property_id": property_id,
+            "name": "Einheit 1",
+            "unit_type": "apartment",
+            "status": "occupied",
+            "area_sqm": 80,
+        },
+    )
+    unit_id = unit_response.json()["id"]
+
+    create_task_response = client.post(
+        "/api/v1/tasks/",
+        headers=auth_headers,
+        json={
+            "property_id": property_id,
+            "unit_id": unit_id,
+            "title": "Heizung prüfen",
+            "description": "Thermostate kontrollieren und Wartung terminieren",
+            "category": "maintenance",
+            "priority": "high",
+            "status": "open",
+            "due_date": "2026-10-15",
+            "assignee_name": "Hausmeister Team",
+            "source": "manual",
+        },
+    )
+    assert create_task_response.status_code == 201
+    task_payload = create_task_response.json()
+    task_id = task_payload["id"]
+    assert task_payload["property_id"] == property_id
+    assert task_payload["unit_id"] == unit_id
+
+    viewer_create_response = client.post(
+        "/api/v1/tasks/",
+        headers=viewer_auth_headers,
+        json={
+            "title": "Nicht erlaubt",
+            "category": "other",
+            "priority": "low",
+            "status": "open",
+            "source": "manual",
+        },
+    )
+    assert viewer_create_response.status_code == 403
+
+    get_task_response = client.get(f"/api/v1/tasks/{task_id}", headers=auth_headers)
+    assert get_task_response.status_code == 200
+    assert get_task_response.json()["title"] == "Heizung prüfen"
+
+    update_task_response = client.put(
+        f"/api/v1/tasks/{task_id}",
+        headers=auth_headers,
+        json={
+            "property_id": property_id,
+            "unit_id": unit_id,
+            "title": "Heizung prüfen",
+            "description": "Termin mit Fachfirma bestätigt",
+            "category": "maintenance",
+            "priority": "urgent",
+            "status": "in_progress",
+            "due_date": "2026-10-12",
+            "assignee_name": "Fachfirma Wärme GmbH",
+            "source": "manual",
+        },
+    )
+    assert update_task_response.status_code == 200
+    assert update_task_response.json()["status"] == "in_progress"
+    assert update_task_response.json()["priority"] == "urgent"
+
+    viewer_update_response = client.put(
+        f"/api/v1/tasks/{task_id}",
+        headers=viewer_auth_headers,
+        json={
+            "property_id": property_id,
+            "unit_id": unit_id,
+            "title": "Heizung prüfen",
+            "description": "Nicht erlaubt",
+            "category": "maintenance",
+            "priority": "low",
+            "status": "done",
+            "due_date": "2026-10-10",
+            "assignee_name": "Viewer",
+            "source": "manual",
+        },
+    )
+    assert viewer_update_response.status_code == 403
+
+    with SessionLocal() as db:
+        db.add(
+            User(
+                organization_id="00000000-0000-0000-0000-000000000098",
+                email="task-scope@example.com",
+                full_name="Task Scope User",
+                hashed_password=get_password_hash("scope-password"),
+                role="owner",
+                is_active=True,
+            )
+        )
+        db.commit()
+
+    other_login_response = client.post(
+        "/api/v1/auth/token",
+        data={"username": "task-scope@example.com", "password": "scope-password"},
+    )
+    other_headers = {"Authorization": "Bearer " + other_login_response.json()["access_token"]}
+
+    other_property_response = client.post(
+        "/api/v1/properties/",
+        headers=other_headers,
+        json={
+            "name": "Serviceobjekt Hamburg",
+            "property_type": "commercial",
+            "street": "Serviceweg 8",
+            "postal_code": "20095",
+            "city": "Hamburg",
+            "purchase_price": 520000,
+        },
+    )
+    other_property_id = other_property_response.json()["id"]
+    other_task_response = client.post(
+        "/api/v1/tasks/",
+        headers=other_headers,
+        json={
+            "property_id": other_property_id,
+            "unit_id": None,
+            "title": "Dach prüfen",
+            "description": "Nur andere Organisation",
+            "category": "inspection",
+            "priority": "medium",
+            "status": "open",
+            "due_date": "2026-11-01",
+            "assignee_name": "Extern",
+            "source": "manual",
+        },
+    )
+    assert other_task_response.status_code == 201
+    other_task_id = other_task_response.json()["id"]
+
+    own_tasks_response = client.get("/api/v1/tasks/", headers=auth_headers)
+    assert own_tasks_response.status_code == 200
+    own_task_ids = {task["id"] for task in own_tasks_response.json()}
+    assert task_id in own_task_ids
+    assert other_task_id not in own_task_ids
+
+    audit_response = client.get("/api/v1/audit-logs/?resource_type=task", headers=auth_headers)
+    assert audit_response.status_code == 200
+    audit_actions = {entry["action"] for entry in audit_response.json()}
+    assert "task.created" in audit_actions
+    assert "task.updated" in audit_actions
+
+    viewer_delete_response = client.delete(f"/api/v1/tasks/{task_id}", headers=viewer_auth_headers)
+    assert viewer_delete_response.status_code == 403
+
+    delete_task_response = client.delete(f"/api/v1/tasks/{task_id}", headers=auth_headers)
+    assert delete_task_response.status_code == 204
+
+    deleted_list_response = client.get("/api/v1/tasks/", headers=auth_headers)
+    assert all(task["id"] != task_id for task in deleted_list_response.json())
+
+
 def test_banking_csv_import_deduplicates_and_auto_matches_payment(
     client: TestClient, auth_headers: dict[str, str]
 ) -> None:

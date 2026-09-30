@@ -75,6 +75,7 @@ import {
   listProperties,
 } from "../services/propertyService";
 import { DashboardReport, getDashboardReport } from "../services/reportService";
+import { createTask, deleteTask, listTasks, TaskItem, updateTask } from "../services/taskService";
 import {
   Tenant,
   createTenant,
@@ -127,6 +128,12 @@ type UnitListControls = ListControls & {
 type ContractListControls = ListControls & {
   unit_id: string;
   tenant_id: string;
+};
+
+type TaskListControls = ListControls & {
+  property_id: string;
+  status: string;
+  priority: string;
 };
 
 type OperatingCostListControls = ListControls & {
@@ -396,6 +403,7 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
   const [units, setUnits] = useState<Unit[]>([]);
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [contracts, setContracts] = useState<Contract[]>([]);
+  const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [operatingCostPeriods, setOperatingCostPeriods] = useState<OperatingCostPeriod[]>([]);
   const [operatingCostItems, setOperatingCostItems] = useState<OperatingCostItem[]>([]);
   const [selectedOperatingCostPeriodId, setSelectedOperatingCostPeriodId] = useState("");
@@ -445,6 +453,18 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
     end_date: "",
     cold_rent: "0",
     service_charge_advance: "0",
+  });
+  const [taskForm, setTaskForm] = useState({
+    property_id: "",
+    unit_id: "",
+    title: "",
+    description: "",
+    category: "maintenance",
+    priority: "medium",
+    status: "open",
+    due_date: "",
+    assignee_name: "",
+    source: "manual",
   });
   const [operatingCostPeriodForm, setOperatingCostPeriodForm] = useState({
     property_id: "",
@@ -518,6 +538,12 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
     unit_id: "all",
     tenant_id: "all",
   });
+  const [taskList, setTaskList] = useState<TaskListControls>({
+    ...defaultListControls,
+    property_id: "all",
+    status: "all",
+    priority: "all",
+  });
   const [operatingCostList, setOperatingCostList] = useState<OperatingCostListControls>({
     ...defaultListControls,
     property_id: "all",
@@ -554,6 +580,7 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
         loadedUnits,
         loadedTenants,
         loadedContracts,
+        loadedTasks,
         loadedOperatingCostPeriods,
         loadedEntries,
         loadedAuditLogs,
@@ -569,6 +596,7 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
         listUnits(),
         listTenants(),
         listContracts(),
+        listTasks(),
         listOperatingCostPeriods(),
         listAccountingEntries(),
         listAuditLogs({ limit: 200 }),
@@ -595,6 +623,7 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
       setUnits(loadedUnits);
       setTenants(loadedTenants);
       setContracts(loadedContracts);
+      setTasks(loadedTasks);
       setOperatingCostPeriods(loadedOperatingCostPeriods);
       setEntries(loadedEntries);
       setAuditLogs(loadedAuditLogs);
@@ -830,6 +859,68 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
       await loadOperatingCostPeriodDetails(createdPeriod.id);
     } catch {
       setLoadError("Nebenkostenperiode konnte nicht gespeichert werden.");
+    }
+  }
+
+  async function handleCreateTask(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    try {
+      await createTask({
+        property_id: taskForm.property_id || null,
+        unit_id: taskForm.unit_id || null,
+        title: taskForm.title,
+        description: taskForm.description || null,
+        category: taskForm.category,
+        priority: taskForm.priority,
+        status: taskForm.status,
+        due_date: taskForm.due_date || null,
+        assignee_name: taskForm.assignee_name || null,
+        source: taskForm.source,
+      });
+      setTaskForm({
+        property_id: "",
+        unit_id: "",
+        title: "",
+        description: "",
+        category: "maintenance",
+        priority: "medium",
+        status: "open",
+        due_date: "",
+        assignee_name: "",
+        source: "manual",
+      });
+      await loadDashboardData();
+    } catch {
+      setLoadError("Aufgabe konnte nicht gespeichert werden.");
+    }
+  }
+
+  async function handleUpdateTaskStatus(task: TaskItem, status: string) {
+    try {
+      await updateTask(task.id, {
+        property_id: task.property_id ?? null,
+        unit_id: task.unit_id ?? null,
+        title: task.title,
+        description: task.description ?? null,
+        category: task.category,
+        priority: task.priority,
+        status,
+        due_date: task.due_date ?? null,
+        assignee_name: task.assignee_name ?? null,
+        source: task.source,
+      });
+      await loadDashboardData();
+    } catch {
+      setLoadError("Aufgabenstatus konnte nicht aktualisiert werden.");
+    }
+  }
+
+  async function handleDeleteTask(task: TaskItem) {
+    try {
+      await deleteTask(task.id);
+      await loadDashboardData();
+    } catch {
+      setLoadError("Aufgabe konnte nicht gelöscht werden.");
     }
   }
 
@@ -1163,6 +1254,12 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
     value: unit.id,
     label: unitLabelById.get(unit.id) ?? unit.name,
   }));
+  const taskUnitOptions = units
+    .filter((unit) => !taskForm.property_id || unit.property_id === taskForm.property_id)
+    .map((unit) => ({
+      value: unit.id,
+      label: unitLabelById.get(unit.id) ?? unit.name,
+    }));
   const tenantOptions = tenants.map((tenant) => ({
     value: tenant.id,
     label: formatTenantName(tenant),
@@ -1241,6 +1338,38 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
       contractList.unit_id,
       contracts,
       tenantNameById,
+      unitLabelById,
+    ],
+  );
+
+  const filteredTasks = useMemo(
+    () =>
+      tasks.filter((task) => {
+        const matchesProperty =
+          taskList.property_id === "all" || task.property_id === taskList.property_id;
+        const matchesStatus = taskList.status === "all" || task.status === taskList.status;
+        const matchesPriority =
+          taskList.priority === "all" || task.priority === taskList.priority;
+        const matchesTaskSearch = matchesSearch(taskList.search, [
+          task.title,
+          task.description,
+          task.category,
+          task.priority,
+          task.status,
+          task.assignee_name,
+          task.due_date,
+          propertyNameById.get(task.property_id ?? ""),
+          unitLabelById.get(task.unit_id ?? ""),
+        ]);
+        return matchesProperty && matchesStatus && matchesPriority && matchesTaskSearch;
+      }),
+    [
+      propertyNameById,
+      taskList.priority,
+      taskList.property_id,
+      taskList.search,
+      taskList.status,
+      tasks,
       unitLabelById,
     ],
   );
@@ -1423,6 +1552,10 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
       title: "Verträge",
       subtitle: "Mietverträge zwischen Einheit und Mieter pflegen.",
     },
+    tasks: {
+      title: "Aufgaben & Tickets",
+      subtitle: "Operative Vorgänge, Wartungen und Anfragen organisiert nachverfolgen.",
+    },
     "operating-costs": {
       title: "Nebenkosten & Betriebskosten",
       subtitle: "Abrechnungsperioden, Kostenpositionen und Umlagen für Mietverträge vorbereiten.",
@@ -1453,7 +1586,7 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
             PropertyHub Dashboard
           </Typography>
           <Typography color="text.secondary">
-            Frontend-MVP mit Login, Stammdaten, Billing, Banking, Dokumentenworkflow und Audit-Log.
+            Frontend-MVP mit Login, Stammdaten, Aufgaben, Billing, Banking, Dokumentenworkflow und Audit-Log.
           </Typography>
         </div>
 
@@ -3025,6 +3158,298 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
                 )}
               </CardContent>
             </Card>
+          </Grid>
+        </Grid>
+      ) : null}
+
+      {currentRoute === "tasks" ? (
+        <Grid container spacing={2}>
+          {canManageData ? (
+            <Grid item xs={12} md={5}>
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    Aufgabe oder Ticket anlegen
+                  </Typography>
+                  <Stack component="form" spacing={2} onSubmit={handleCreateTask}>
+                    <TextField
+                      select
+                      label="Immobilie"
+                      value={taskForm.property_id}
+                      onChange={(event) =>
+                        setTaskForm((current) => ({
+                          ...current,
+                          property_id: event.target.value,
+                          unit_id: "",
+                        }))
+                      }
+                    >
+                      <MenuItem value="">Ohne Immobilienbezug</MenuItem>
+                      {propertyOptions.map((option) => (
+                        <MenuItem key={option.value} value={option.value}>
+                          {option.label}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                    <TextField
+                      select
+                      label="Einheit"
+                      value={taskForm.unit_id}
+                      onChange={(event) =>
+                        setTaskForm((current) => ({
+                          ...current,
+                          unit_id: event.target.value,
+                        }))
+                      }
+                    >
+                      <MenuItem value="">Ohne Einheitenbezug</MenuItem>
+                      {taskUnitOptions.map((option) => (
+                        <MenuItem key={option.value} value={option.value}>
+                          {option.label}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                    <TextField
+                      label="Titel"
+                      value={taskForm.title}
+                      onChange={(event) =>
+                        setTaskForm((current) => ({
+                          ...current,
+                          title: event.target.value,
+                        }))
+                      }
+                      required
+                    />
+                    <TextField
+                      label="Beschreibung"
+                      value={taskForm.description}
+                      onChange={(event) =>
+                        setTaskForm((current) => ({
+                          ...current,
+                          description: event.target.value,
+                        }))
+                      }
+                      multiline
+                      minRows={3}
+                    />
+                    <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
+                      <TextField
+                        select
+                        label="Kategorie"
+                        value={taskForm.category}
+                        onChange={(event) =>
+                          setTaskForm((current) => ({
+                            ...current,
+                            category: event.target.value,
+                          }))
+                        }
+                        fullWidth
+                      >
+                        <MenuItem value="maintenance">Wartung</MenuItem>
+                        <MenuItem value="inspection">Prüfung</MenuItem>
+                        <MenuItem value="tenant_request">Mieteranfrage</MenuItem>
+                        <MenuItem value="accounting">Finanzen</MenuItem>
+                        <MenuItem value="compliance">Compliance</MenuItem>
+                        <MenuItem value="other">Sonstiges</MenuItem>
+                      </TextField>
+                      <TextField
+                        select
+                        label="Priorität"
+                        value={taskForm.priority}
+                        onChange={(event) =>
+                          setTaskForm((current) => ({
+                            ...current,
+                            priority: event.target.value,
+                          }))
+                        }
+                        fullWidth
+                      >
+                        <MenuItem value="low">Niedrig</MenuItem>
+                        <MenuItem value="medium">Mittel</MenuItem>
+                        <MenuItem value="high">Hoch</MenuItem>
+                        <MenuItem value="urgent">Dringend</MenuItem>
+                      </TextField>
+                    </Stack>
+                    <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
+                      <TextField
+                        select
+                        label="Status"
+                        value={taskForm.status}
+                        onChange={(event) =>
+                          setTaskForm((current) => ({
+                            ...current,
+                            status: event.target.value,
+                          }))
+                        }
+                        fullWidth
+                      >
+                        <MenuItem value="open">Offen</MenuItem>
+                        <MenuItem value="in_progress">In Bearbeitung</MenuItem>
+                        <MenuItem value="blocked">Blockiert</MenuItem>
+                        <MenuItem value="done">Erledigt</MenuItem>
+                        <MenuItem value="cancelled">Abgebrochen</MenuItem>
+                      </TextField>
+                      <TextField
+                        label="Fällig am"
+                        type="date"
+                        value={taskForm.due_date}
+                        onChange={(event) =>
+                          setTaskForm((current) => ({
+                            ...current,
+                            due_date: event.target.value,
+                          }))
+                        }
+                        fullWidth
+                        InputLabelProps={{ shrink: true }}
+                      />
+                    </Stack>
+                    <TextField
+                      label="Zuständig"
+                      value={taskForm.assignee_name}
+                      onChange={(event) =>
+                        setTaskForm((current) => ({
+                          ...current,
+                          assignee_name: event.target.value,
+                        }))
+                      }
+                    />
+                    <Box>
+                      <Button type="submit" variant="contained">
+                        Aufgabe speichern
+                      </Button>
+                    </Box>
+                  </Stack>
+                </CardContent>
+              </Card>
+            </Grid>
+          ) : null}
+
+          <Grid item xs={12} md={canManageData ? 7 : 12}>
+            <ManagedListCard
+              title="Aufgaben & Tickets"
+              items={filteredTasks}
+              emptyText="Noch keine Aufgaben vorhanden."
+              searchValue={taskList.search}
+              onSearchChange={(value) =>
+                setTaskList((current) => ({ ...current, search: value, page: 1 }))
+              }
+              page={taskList.page}
+              onPageChange={(page) => setTaskList((current) => ({ ...current, page }))}
+              pageSize={taskList.pageSize}
+              onPageSizeChange={(pageSize) =>
+                setTaskList((current) => ({ ...current, pageSize, page: 1 }))
+              }
+              searchLabel="Titel, Bezug oder Zuständigkeit"
+              extraFilters={
+                <>
+                  <TextField
+                    select
+                    size="small"
+                    label="Immobilie"
+                    value={taskList.property_id}
+                    onChange={(event) =>
+                      setTaskList((current) => ({
+                        ...current,
+                        property_id: event.target.value,
+                        page: 1,
+                      }))
+                    }
+                    sx={{ minWidth: 180 }}
+                  >
+                    <MenuItem value="all">Alle Immobilien</MenuItem>
+                    {propertyOptions.map((option) => (
+                      <MenuItem key={option.value} value={option.value}>
+                        {option.label}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                  <TextField
+                    select
+                    size="small"
+                    label="Status"
+                    value={taskList.status}
+                    onChange={(event) =>
+                      setTaskList((current) => ({
+                        ...current,
+                        status: event.target.value,
+                        page: 1,
+                      }))
+                    }
+                    sx={{ minWidth: 160 }}
+                  >
+                    <MenuItem value="all">Alle Status</MenuItem>
+                    <MenuItem value="open">Offen</MenuItem>
+                    <MenuItem value="in_progress">In Bearbeitung</MenuItem>
+                    <MenuItem value="blocked">Blockiert</MenuItem>
+                    <MenuItem value="done">Erledigt</MenuItem>
+                    <MenuItem value="cancelled">Abgebrochen</MenuItem>
+                  </TextField>
+                  <TextField
+                    select
+                    size="small"
+                    label="Priorität"
+                    value={taskList.priority}
+                    onChange={(event) =>
+                      setTaskList((current) => ({
+                        ...current,
+                        priority: event.target.value,
+                        page: 1,
+                      }))
+                    }
+                    sx={{ minWidth: 160 }}
+                  >
+                    <MenuItem value="all">Alle Prioritäten</MenuItem>
+                    <MenuItem value="low">Niedrig</MenuItem>
+                    <MenuItem value="medium">Mittel</MenuItem>
+                    <MenuItem value="high">Hoch</MenuItem>
+                    <MenuItem value="urgent">Dringend</MenuItem>
+                  </TextField>
+                </>
+              }
+              renderPrimary={(task) => task.title}
+              renderSecondary={(task) =>
+                `${propertyNameById.get(task.property_id ?? "") ?? "Ohne Immobilienbezug"}${task.unit_id ? ` · ${unitLabelById.get(task.unit_id) ?? task.unit_id}` : ""}`
+              }
+              renderDetails={(task) => (
+                <Typography color="text.secondary" variant="body2">
+                  {formatStatusLabel(task.category)} · {formatStatusLabel(task.priority)} ·{" "}
+                  {formatStatusLabel(task.status)} · Fällig: {task.due_date ?? "-"} · Zuständig:{" "}
+                  {task.assignee_name ?? "-"}
+                </Typography>
+              )}
+              renderActions={(task) =>
+                canManageData ? (
+                  <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+                    {task.status !== "in_progress" ? (
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() => void handleUpdateTaskStatus(task, "in_progress")}
+                      >
+                        Starten
+                      </Button>
+                    ) : null}
+                    {task.status !== "done" ? (
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() => void handleUpdateTaskStatus(task, "done")}
+                      >
+                        Erledigt
+                      </Button>
+                    ) : null}
+                    <Button
+                      size="small"
+                      color="error"
+                      variant="outlined"
+                      onClick={() => void handleDeleteTask(task)}
+                    >
+                      Löschen
+                    </Button>
+                  </Stack>
+                ) : undefined
+              }
+            />
           </Grid>
         </Grid>
       ) : null}

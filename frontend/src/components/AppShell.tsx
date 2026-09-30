@@ -1,6 +1,7 @@
 import { PropsWithChildren, useMemo, useState } from "react";
 import ApartmentIcon from "@mui/icons-material/Apartment";
 import AssignmentIcon from "@mui/icons-material/Assignment";
+import AssignmentTurnedInIcon from "@mui/icons-material/AssignmentTurnedIn";
 import BusinessIcon from "@mui/icons-material/Business";
 import DescriptionIcon from "@mui/icons-material/Description";
 import GroupsIcon from "@mui/icons-material/Groups";
@@ -46,6 +47,7 @@ const navigationItems: Array<{ route: AppRoute; label: string; icon: JSX.Element
   { route: "units", label: "Einheiten", icon: <HomeWorkIcon fontSize="small" /> },
   { route: "tenants", label: "Mieter", icon: <GroupsIcon fontSize="small" /> },
   { route: "contracts", label: "Verträge", icon: <AssignmentIcon fontSize="small" /> },
+  { route: "tasks", label: "Aufgaben", icon: <AssignmentTurnedInIcon fontSize="small" /> },
   { route: "operating-costs", label: "Nebenkosten", icon: <PlumbingIcon fontSize="small" /> },
   { route: "accounting", label: "Accounting", icon: <TableChartIcon fontSize="small" /> },
   { route: "billing", label: "Billing", icon: <ReceiptLongIcon fontSize="small" /> },
