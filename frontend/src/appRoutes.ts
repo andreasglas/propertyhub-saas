@@ -1,6 +1,7 @@
 export type AppRoute =
   | "overview"
   | "setup-password"
+  | "activity"
   | "organization"
   | "users"
   | "properties"
@@ -15,6 +16,7 @@ export type AppRoute =
 export const appRoutePaths: Record<AppRoute, string> = {
   overview: "/",
   "setup-password": "/setup-password",
+  activity: "/activity",
   organization: "/organization",
   users: "/users",
   properties: "/properties",

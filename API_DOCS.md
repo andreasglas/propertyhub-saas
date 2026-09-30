@@ -75,6 +75,12 @@ Erstellt einen eingeladenen Benutzer ohne Passwort und liefert Setup-Link und ab
 
 Erzeugt für einen noch nicht aktivierten Benutzer einen neuen Einladungslink und triggert einen erneuten Mailversand bzw. manuellen Fallback. Nur `owner`.
 
+## Audit-Log
+
+### `GET /api/v1/audit-logs/`
+
+Liefert den organisationsbezogenen Activity-Feed bzw. das Audit-Log. Optional filterbar über `resource_type`, `action` und `limit`.
+
 ## Fachmodule
 
 Die folgenden Module sind als strukturierte Einstiegspunkte vorhanden:
@@ -135,8 +141,11 @@ Die folgenden Module sind als strukturierte Einstiegspunkte vorhanden:
 - `GET /api/v1/reports/open-invoices`
 - `GET /api/v1/reports/export/dashboard.csv`
 - `GET /api/v1/reports/export/open-invoices.csv`
+- `GET /api/v1/audit-logs/`
 
 Der Reporting-Endpunkt liefert aktuell eine Dashboard-Zusammenfassung mit Zählern und Summen für Immobilien, Verträge, Rechnungen, Zahlungen und Accounting Entries. Zusätzlich gibt es jetzt eine offene-Posten-Liste sowie CSV-Exporte für Dashboard-Summary und offene Rechnungen.
+
+Wichtige Mutationen in Organisation, Benutzerverwaltung, Stammdaten, Billing, Banking und Dokumentenworkflow werden zusätzlich im Audit-Log protokolliert.
 
 Schreiboperationen sind aktuell auf die Rollen `owner` und `manager` beschränkt; `viewer` bleibt read-only.
 

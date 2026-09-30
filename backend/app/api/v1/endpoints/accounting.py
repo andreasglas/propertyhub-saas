@@ -9,10 +9,12 @@ from app.schemas.accounting import (
     AccountingEntryRead,
     AccountingEntryUpdate,
 )
+from app.services.audit_log_service import AuditLogService
 from app.services.accounting_service import AccountingService
 
 router = APIRouter()
 service = AccountingService()
+audit_service = AuditLogService()
 
 
 @router.get("/", response_model=list[AccountingEntryRead])
@@ -29,7 +31,18 @@ async def create_accounting_entry(
     current_user: User = Depends(require_roles("owner", "manager")),
     db: Session = Depends(get_db),
 ) -> AccountingEntryRead:
-    return service.create_entry(db, current_user.organization_id, payload)
+    entry = service.create_entry(db, current_user.organization_id, payload)
+    audit_service.record(
+        db,
+        organization_id=current_user.organization_id,
+        actor=current_user,
+        action="accounting.created",
+        resource_type="accounting_entry",
+        resource_id=entry.id,
+        summary=f"Accounting-Eintrag {entry.id} angelegt",
+        details={"entry_type": entry.entry_type, "category": entry.category},
+    )
+    return entry
 
 
 @router.get("/{entry_id}", response_model=AccountingEntryRead)
@@ -48,7 +61,18 @@ async def update_accounting_entry(
     current_user: User = Depends(require_roles("owner", "manager")),
     db: Session = Depends(get_db),
 ) -> AccountingEntryRead:
-    return service.update_entry(db, current_user.organization_id, entry_id, payload)
+    entry = service.update_entry(db, current_user.organization_id, entry_id, payload)
+    audit_service.record(
+        db,
+        organization_id=current_user.organization_id,
+        actor=current_user,
+        action="accounting.updated",
+        resource_type="accounting_entry",
+        resource_id=entry.id,
+        summary=f"Accounting-Eintrag {entry.id} aktualisiert",
+        details={"entry_type": entry.entry_type, "category": entry.category},
+    )
+    return entry
 
 
 @router.delete("/{entry_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -57,5 +81,16 @@ async def delete_accounting_entry(
     current_user: User = Depends(require_roles("owner", "manager")),
     db: Session = Depends(get_db),
 ) -> Response:
+    entry = service.get_entry(db, current_user.organization_id, entry_id)
     service.delete_entry(db, current_user.organization_id, entry_id)
+    audit_service.record(
+        db,
+        organization_id=current_user.organization_id,
+        actor=current_user,
+        action="accounting.deleted",
+        resource_type="accounting_entry",
+        resource_id=entry_id,
+        summary=f"Accounting-Eintrag {entry.id} gelöscht",
+        details={"entry_type": entry.entry_type, "category": entry.category},
+    )
     return Response(status_code=status.HTTP_204_NO_CONTENT)

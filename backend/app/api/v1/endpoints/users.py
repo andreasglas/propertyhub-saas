@@ -11,12 +11,14 @@ from app.schemas.user import (
     UserRead,
     UserUpdate,
 )
+from app.services.audit_log_service import AuditLogService
 from app.services.notification_service import NotificationService
 from app.services.user_service import UserService
 
 router = APIRouter()
 service = UserService()
 notification_service = NotificationService()
+audit_service = AuditLogService()
 
 
 @router.get("/", response_model=list[UserRead])
@@ -33,7 +35,18 @@ async def create_user(
     current_user: User = Depends(require_roles("owner")),
     db: Session = Depends(get_db),
 ) -> UserRead:
-    return service.create_user(db, current_user.organization_id, payload)
+    user = service.create_user(db, current_user.organization_id, payload)
+    audit_service.record(
+        db,
+        organization_id=current_user.organization_id,
+        actor=current_user,
+        action="user.created",
+        resource_type="user",
+        resource_id=user.id,
+        summary=f"Benutzer {user.email} angelegt",
+        details={"role": user.role, "is_active": user.is_active},
+    )
+    return user
 
 
 @router.post(
@@ -47,6 +60,16 @@ async def invite_user(
     db: Session = Depends(get_db),
 ) -> UserInvitationResult:
     user, invitation_token = service.invite_user(db, current_user.organization_id, payload)
+    audit_service.record(
+        db,
+        organization_id=current_user.organization_id,
+        actor=current_user,
+        action="user.invited",
+        resource_type="user",
+        resource_id=user.id,
+        summary=f"Einladung für {user.email} erstellt",
+        details={"role": user.role, "delivery_status": user.invitation_delivery_status},
+    )
     return UserInvitationResult(
         user=user,
         invitation_token=invitation_token,
@@ -67,7 +90,18 @@ async def update_user(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Owners cannot deactivate or demote their own account",
         )
-    return service.update_user(db, current_user.organization_id, user_id, payload)
+    user = service.update_user(db, current_user.organization_id, user_id, payload)
+    audit_service.record(
+        db,
+        organization_id=current_user.organization_id,
+        actor=current_user,
+        action="user.updated",
+        resource_type="user",
+        resource_id=user.id,
+        summary=f"Benutzer {user.email} aktualisiert",
+        details={"role": user.role, "is_active": user.is_active},
+    )
+    return user
 
 
 @router.post("/{user_id}/invite", response_model=UserInvitationResult)
@@ -78,6 +112,16 @@ async def resend_invite(
 ) -> UserInvitationResult:
     user, invitation_token = service.resend_invitation(
         db, current_user.organization_id, user_id
+    )
+    audit_service.record(
+        db,
+        organization_id=current_user.organization_id,
+        actor=current_user,
+        action="user.reinvited",
+        resource_type="user",
+        resource_id=user.id,
+        summary=f"Einladung für {user.email} erneut versendet",
+        details={"delivery_status": user.invitation_delivery_status},
     )
     return UserInvitationResult(
         user=user,

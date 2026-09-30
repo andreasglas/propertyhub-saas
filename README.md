@@ -113,6 +113,7 @@ Das Frontend nutzt im Development standardmäßig den relativen Pfad `/api`; lok
 - CSV-/CAMT-Bankimport mit Dublettenprüfung und erster automatischer Zahlungszuordnung
 - Fälligkeiten, offene Posten, Reminder-Historie und CSV-Reporte für Rechnungen
 - Dokumenten-Review mit Kategorie-, Versions- und Freigabe-Metadaten
+- Audit-Log für wichtige Mutationen sowie Activity-Feed im Dashboard
 - standardisierte Suche-, Filter- und Pagination-Muster für operative Listen im Dashboard
 
 ## Erweiterte Backend-Konfiguration

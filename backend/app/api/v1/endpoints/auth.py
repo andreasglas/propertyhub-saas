@@ -9,11 +9,13 @@ from app.db.models.organization import Organization
 from app.db.models.user import User
 from app.db.session import get_db
 from app.schemas.user import InvitationInfo, SetupPasswordRequest, SetupPasswordResult, Token, UserRead
+from app.services.audit_log_service import AuditLogService
 from app.services.user_service import UserService
 from sqlalchemy import select
 
 router = APIRouter()
 service = UserService()
+audit_service = AuditLogService()
 
 
 @router.post("/token", response_model=Token)
@@ -74,7 +76,17 @@ async def setup_password(
     db: Session = Depends(get_db),
 ) -> SetupPasswordResult:
     try:
-        service.accept_invitation(db, payload.token, payload.password, payload.full_name)
+        user = service.accept_invitation(db, payload.token, payload.password, payload.full_name)
     except PropertyHubError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
+    audit_service.record(
+        db,
+        organization_id=user.organization_id,
+        actor=user,
+        action="user.invitation_accepted",
+        resource_type="user",
+        resource_id=user.id,
+        summary=f"Einladung von {user.email} angenommen",
+        details={"role": user.role},
+    )
     return SetupPasswordResult()

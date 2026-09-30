@@ -2158,6 +2158,125 @@ def test_invitation_tracks_delivery_status_and_setup_url(
     assert payload["user"]["invitation_delivery_error"] is None
 
 
+def test_audit_logs_capture_mutations_and_support_filters(
+    client: TestClient, auth_headers: dict[str, str], viewer_auth_headers: dict[str, str]
+) -> None:
+    property_response = client.post(
+        "/api/v1/properties/",
+        headers=auth_headers,
+        json={
+            "name": "Audit Objekt",
+            "property_type": "residential",
+            "street": "Logstraße 1",
+            "postal_code": "10115",
+            "city": "Berlin",
+            "purchase_price": 123000,
+        },
+    )
+    assert property_response.status_code == 201
+    property_id = property_response.json()["id"]
+
+    update_org_response = client.put(
+        "/api/v1/organization/me",
+        headers=auth_headers,
+        json={
+            "name": "Audit Verwaltung GmbH",
+            "legal_name": "Audit Verwaltung GmbH",
+            "street": "Logstraße 1",
+            "postal_code": "10115",
+            "city": "Berlin",
+            "country": "Deutschland",
+            "contact_email": "audit@propertyhub.de",
+            "contact_phone": "+49 30 1000",
+        },
+    )
+    assert update_org_response.status_code == 200
+
+    logs_response = client.get("/api/v1/audit-logs/", headers=auth_headers)
+    assert logs_response.status_code == 200
+    payload = logs_response.json()
+    assert any(
+        entry["resource_type"] == "property"
+        and entry["action"] == "property.created"
+        and entry["resource_id"] == property_id
+        for entry in payload
+    )
+    assert any(entry["action"] == "organization.updated" for entry in payload)
+
+    filtered_logs_response = client.get(
+        "/api/v1/audit-logs/?resource_type=property&action=property.created",
+        headers=auth_headers,
+    )
+    assert filtered_logs_response.status_code == 200
+    filtered_payload = filtered_logs_response.json()
+    assert len(filtered_payload) >= 1
+    assert all(entry["resource_type"] == "property" for entry in filtered_payload)
+    assert all(entry["action"] == "property.created" for entry in filtered_payload)
+
+    viewer_logs_response = client.get("/api/v1/audit-logs/", headers=viewer_auth_headers)
+    assert viewer_logs_response.status_code == 200
+
+
+def test_audit_logs_are_scoped_to_authenticated_organization(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    create_property_response = client.post(
+        "/api/v1/properties/",
+        headers=auth_headers,
+        json={
+            "name": "Org Eins Objekt",
+            "property_type": "residential",
+            "street": "Mandantweg 1",
+            "postal_code": "10115",
+            "city": "Berlin",
+            "purchase_price": 222000,
+        },
+    )
+    assert create_property_response.status_code == 201
+    own_property_id = create_property_response.json()["id"]
+
+    with SessionLocal() as db:
+        db.add(
+            User(
+                organization_id="00000000-0000-0000-0000-000000000099",
+                email="audit-scope@example.com",
+                full_name="Audit Scope User",
+                hashed_password=get_password_hash("scope-password"),
+                role="owner",
+                is_active=True,
+            )
+        )
+        db.commit()
+
+    login_response = client.post(
+        "/api/v1/auth/token",
+        data={"username": "audit-scope@example.com", "password": "scope-password"},
+    )
+    other_headers = {"Authorization": "Bearer " + login_response.json()["access_token"]}
+
+    other_property_response = client.post(
+        "/api/v1/properties/",
+        headers=other_headers,
+        json={
+            "name": "Org Zwei Objekt",
+            "property_type": "commercial",
+            "street": "Mandantweg 2",
+            "postal_code": "20095",
+            "city": "Hamburg",
+            "purchase_price": 333000,
+        },
+    )
+    assert other_property_response.status_code == 201
+
+    own_logs_response = client.get("/api/v1/audit-logs/?resource_type=property", headers=auth_headers)
+    assert own_logs_response.status_code == 200
+    assert any(entry["resource_id"] == own_property_id for entry in own_logs_response.json())
+    assert all(
+        entry["summary"] != "Immobilie Org Zwei Objekt angelegt"
+        for entry in own_logs_response.json()
+    )
+
+
 def test_banking_csv_import_deduplicates_and_auto_matches_payment(
     client: TestClient, auth_headers: dict[str, str]
 ) -> None:

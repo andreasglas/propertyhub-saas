@@ -29,6 +29,7 @@ import {
   createAccountingEntry,
   listAccountingEntries,
 } from "../services/accountingService";
+import { AuditLogEntry, listAuditLogs } from "../services/auditLogService";
 import {
   BankTransaction,
   importBankTransactions,
@@ -122,6 +123,11 @@ type DocumentListControls = ListControls & {
 
 type BankTransactionListControls = ListControls & {
   status: string;
+};
+
+type AuditLogListControls = ListControls & {
+  action: string;
+  resource_type: string;
 };
 
 type SelectOption = {
@@ -346,6 +352,7 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [entries, setEntries] = useState<AccountingEntry[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [bankTransactions, setBankTransactions] = useState<BankTransaction[]>([]);
@@ -460,6 +467,11 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
     ocr_status: "all",
     related_model: "all",
   });
+  const [auditLogList, setAuditLogList] = useState<AuditLogListControls>({
+    ...defaultListControls,
+    action: "all",
+    resource_type: "all",
+  });
 
   async function loadDashboardData() {
     setLoading(true);
@@ -473,6 +485,7 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
         loadedTenants,
         loadedContracts,
         loadedEntries,
+        loadedAuditLogs,
         loadedInvoices,
         loadedPayments,
         loadedBankTransactions,
@@ -486,6 +499,7 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
         listTenants(),
         listContracts(),
         listAccountingEntries(),
+        listAuditLogs({ limit: 200 }),
         listInvoices(),
         listPayments(),
         listBankTransactions(),
@@ -510,6 +524,7 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
       setTenants(loadedTenants);
       setContracts(loadedContracts);
       setEntries(loadedEntries);
+      setAuditLogs(loadedAuditLogs);
       setInvoices(loadedInvoices);
       setPayments(loadedPayments);
       setBankTransactions(loadedBankTransactions);
@@ -1109,6 +1124,26 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
     [documentList.ocr_status, documentList.related_model, documentList.search, documents],
   );
 
+  const filteredAuditLogs = useMemo(
+    () =>
+      auditLogs.filter((entry) => {
+        const matchesAction =
+          auditLogList.action === "all" || entry.action === auditLogList.action;
+        const matchesResourceType =
+          auditLogList.resource_type === "all" ||
+          entry.resource_type === auditLogList.resource_type;
+        const matchesAuditSearch = matchesSearch(auditLogList.search, [
+          entry.summary,
+          entry.actor_email,
+          entry.action,
+          entry.resource_type,
+          entry.resource_id,
+        ]);
+        return matchesAction && matchesResourceType && matchesAuditSearch;
+      }),
+    [auditLogList.action, auditLogList.resource_type, auditLogList.search, auditLogs],
+  );
+
   useEffect(() => {
     if (!isAuthenticated || currentRoute !== "documents" || !hasRunningOcrJobs) {
       return;
@@ -1131,6 +1166,10 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
     "setup-password": {
       title: "Passwort festlegen",
       subtitle: "Einladung annehmen und Zugang aktivieren.",
+    },
+    activity: {
+      title: "Aktivität & Audit-Log",
+      subtitle: "Änderungen, Importe und operative Vorgänge der aktuellen Organisation nachvollziehen.",
     },
     organization: {
       title: "Organisation",
@@ -1182,7 +1221,7 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
             PropertyHub Dashboard
           </Typography>
           <Typography color="text.secondary">
-            Frontend-MVP mit Login, Stammdaten, Billing, Banking und Dokumentenworkflow.
+            Frontend-MVP mit Login, Stammdaten, Billing, Banking, Dokumentenworkflow und Audit-Log.
           </Typography>
         </div>
 
@@ -1329,6 +1368,7 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
                         Noch keine Immobilien vorhanden.
                       </Typography>
                     ) : null}
+
                   </List>
                 </CardContent>
               </Card>
@@ -1412,6 +1452,83 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
             </Grid>
           </Grid>
         </>
+      ) : null}
+
+      {currentRoute === "activity" ? (
+        <ManagedListCard
+          title="Letzte Aktivitäten"
+          items={filteredAuditLogs}
+          emptyText="Noch keine Audit-Logs vorhanden."
+          searchValue={auditLogList.search}
+          onSearchChange={(value) =>
+            setAuditLogList((current) => ({ ...current, search: value, page: 1 }))
+          }
+          page={auditLogList.page}
+          onPageChange={(page) =>
+            setAuditLogList((current) => ({
+              ...current,
+              page,
+            }))
+          }
+          pageSize={auditLogList.pageSize}
+          onPageSizeChange={(pageSize) =>
+            setAuditLogList((current) => ({ ...current, pageSize, page: 1 }))
+          }
+          searchLabel="Suche nach Aktion, Ressource oder Benutzer"
+          extraFilters={
+            <>
+              <TextField
+                select
+                size="small"
+                label="Aktion"
+                value={auditLogList.action}
+                onChange={(event) =>
+                  setAuditLogList((current) => ({
+                    ...current,
+                    action: event.target.value,
+                    page: 1,
+                  }))
+                }
+              >
+                <MenuItem value="all">Alle Aktionen</MenuItem>
+                {Array.from(new Set(auditLogs.map((entry) => entry.action))).map((action) => (
+                  <MenuItem key={action} value={action}>
+                    {formatStatusLabel(action)}
+                  </MenuItem>
+                ))}
+              </TextField>
+              <TextField
+                select
+                size="small"
+                label="Ressource"
+                value={auditLogList.resource_type}
+                onChange={(event) =>
+                  setAuditLogList((current) => ({
+                    ...current,
+                    resource_type: event.target.value,
+                    page: 1,
+                  }))
+                }
+              >
+                <MenuItem value="all">Alle Ressourcen</MenuItem>
+                {Array.from(new Set(auditLogs.map((entry) => entry.resource_type))).map((resourceType) => (
+                  <MenuItem key={resourceType} value={resourceType}>
+                    {formatStatusLabel(resourceType)}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </>
+          }
+          helperText="Das Audit-Log zeigt Änderungen an Stammdaten, Rechnungen, Banking und Dokumenten."
+          renderPrimary={(entry) => entry.summary}
+          renderSecondary={(entry) => `${formatStatusLabel(entry.action)} · ${entry.created_at}`}
+          renderDetails={(entry) => (
+            <Typography color="text.secondary" variant="body2">
+              Benutzer: {entry.actor_email ?? "-"} · Ressource: {entry.resource_type}
+              {entry.resource_id ? ` · ID: ${entry.resource_id}` : ""}
+            </Typography>
+          )}
+        />
       ) : null}
 
       {currentRoute === "organization" ? (

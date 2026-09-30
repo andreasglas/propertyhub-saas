@@ -12,10 +12,12 @@ from app.schemas.invoice import (
     PaymentReminderCreate,
     PaymentReminderRead,
 )
+from app.services.audit_log_service import AuditLogService
 from app.services.invoice_service import InvoiceService
 
 router = APIRouter()
 service = InvoiceService()
+audit_service = AuditLogService()
 
 
 @router.get("/", response_model=list[InvoiceRead])
@@ -40,7 +42,18 @@ async def create_invoice(
     current_user: User = Depends(require_roles("owner", "manager")),
     db: Session = Depends(get_db),
 ) -> InvoiceRead:
-    return service.create_invoice(db, current_user.organization_id, payload)
+    invoice = service.create_invoice(db, current_user.organization_id, payload)
+    audit_service.record(
+        db,
+        organization_id=current_user.organization_id,
+        actor=current_user,
+        action="invoice.created",
+        resource_type="invoice",
+        resource_id=invoice.id,
+        summary=f"Rechnung {invoice.invoice_number or invoice.id} angelegt",
+        details={"status": invoice.status, "gross_amount": invoice.gross_amount},
+    )
+    return invoice
 
 
 @router.get("/{invoice_id}", response_model=InvoiceRead)
@@ -72,7 +85,18 @@ async def create_invoice_reminder(
     current_user: User = Depends(require_roles("owner", "manager")),
     db: Session = Depends(get_db),
 ) -> PaymentReminderRead:
-    return service.create_reminder(db, current_user.organization_id, invoice_id, payload)
+    reminder = service.create_reminder(db, current_user.organization_id, invoice_id, payload)
+    audit_service.record(
+        db,
+        organization_id=current_user.organization_id,
+        actor=current_user,
+        action="invoice.reminder_created",
+        resource_type="payment_reminder",
+        resource_id=reminder.id,
+        summary=f"Zahlungserinnerung für Rechnung {invoice_id} erstellt",
+        details={"invoice_id": invoice_id, "reminder_level": reminder.reminder_level, "status": reminder.status},
+    )
+    return reminder
 
 
 @router.put("/{invoice_id}", response_model=InvoiceRead)
@@ -82,7 +106,18 @@ async def update_invoice(
     current_user: User = Depends(require_roles("owner", "manager")),
     db: Session = Depends(get_db),
 ) -> InvoiceRead:
-    return service.update_invoice(db, current_user.organization_id, invoice_id, payload)
+    invoice = service.update_invoice(db, current_user.organization_id, invoice_id, payload)
+    audit_service.record(
+        db,
+        organization_id=current_user.organization_id,
+        actor=current_user,
+        action="invoice.updated",
+        resource_type="invoice",
+        resource_id=invoice.id,
+        summary=f"Rechnung {invoice.invoice_number or invoice.id} aktualisiert",
+        details={"status": invoice.status, "gross_amount": invoice.gross_amount},
+    )
+    return invoice
 
 
 @router.delete("/{invoice_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -91,5 +126,16 @@ async def delete_invoice(
     current_user: User = Depends(require_roles("owner", "manager")),
     db: Session = Depends(get_db),
 ) -> Response:
+    invoice = service.get_invoice(db, current_user.organization_id, invoice_id)
     service.delete_invoice(db, current_user.organization_id, invoice_id)
+    audit_service.record(
+        db,
+        organization_id=current_user.organization_id,
+        actor=current_user,
+        action="invoice.deleted",
+        resource_type="invoice",
+        resource_id=invoice_id,
+        summary=f"Rechnung {invoice.invoice_number or invoice.id} gelöscht",
+        details={"status": invoice.status, "gross_amount": float(invoice.gross_amount)},
+    )
     return Response(status_code=status.HTTP_204_NO_CONTENT)

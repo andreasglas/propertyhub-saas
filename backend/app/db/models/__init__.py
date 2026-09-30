@@ -1,3 +1,4 @@
+from app.db.models.audit_log import AuditLog
 from app.db.models.accounting import AccountingEntry
 from app.db.models.bank_transaction import BankTransaction
 from app.db.models.contract import Contract
@@ -12,6 +13,7 @@ from app.db.models.user import User
 
 __all__ = [
     "AccountingEntry",
+    "AuditLog",
     "BankTransaction",
     "Contract",
     "Document",

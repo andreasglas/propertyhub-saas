@@ -4,6 +4,7 @@ import AssignmentIcon from "@mui/icons-material/Assignment";
 import BusinessIcon from "@mui/icons-material/Business";
 import DescriptionIcon from "@mui/icons-material/Description";
 import GroupsIcon from "@mui/icons-material/Groups";
+import HistoryIcon from "@mui/icons-material/History";
 import HomeWorkIcon from "@mui/icons-material/HomeWork";
 import MenuIcon from "@mui/icons-material/Menu";
 import PaidIcon from "@mui/icons-material/Paid";
@@ -33,6 +34,7 @@ import { useAuth } from "../context/AuthContext";
 
 const navigationItems: Array<{ route: AppRoute; label: string; icon: JSX.Element }> = [
   { route: "overview", label: "Übersicht", icon: <ApartmentIcon fontSize="small" /> },
+  { route: "activity", label: "Aktivität", icon: <HistoryIcon fontSize="small" /> },
   {
     route: "organization",
     label: "Organisation",
