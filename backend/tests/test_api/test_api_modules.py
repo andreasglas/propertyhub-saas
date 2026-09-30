@@ -1489,7 +1489,7 @@ def test_reports_dashboard_summary_returns_aggregated_metrics(
             "category": "inspection",
             "priority": "medium",
             "status": "open",
-            "due_date": "2026-10-01",
+            "due_date": (date.today() - timedelta(days=7)).isoformat(),
             "estimated_cost": 80,
             "actual_cost": None,
             "assignee_name": "Facility Team",
