@@ -52,6 +52,9 @@ import {
 import { createInvoice, Invoice, listInvoices } from "../services/invoiceService";
 import {
   createOperatingCostItem,
+  downloadOperatingCostSettlementCsv,
+  downloadOperatingCostSettlementPdf,
+  finalizeOperatingCostPeriod,
   createOperatingCostPeriod,
   getOperatingCostSettlementPreview,
   listOperatingCostItems,
@@ -209,6 +212,33 @@ function formatPropertyLocation(property: Property) {
 
 function formatStatusLabel(value: string) {
   return value.replace(/_/g, " ").replace(/\b\w/g, (character: string) => character.toUpperCase());
+}
+
+function formatAllocationMethodLabel(value: string) {
+  if (value === "area") {
+    return "Nach Fläche und Tagen";
+  }
+  if (value === "unit_count") {
+    return "Gleichmäßig je Einheit und Tagen";
+  }
+  if (value === "occupancy_days") {
+    return "Nach Belegungstagen";
+  }
+  if (value === "advance_share") {
+    return "Nach Vorauszahlungsanteil";
+  }
+  return formatStatusLabel(value);
+}
+
+function triggerBlobDownload(blob: Blob, filename: string) {
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
 }
 
 function getStatusChipColor(
@@ -380,6 +410,7 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
   const [report, setReport] = useState<DashboardReport | null>(null);
   const [latestInvitation, setLatestInvitation] = useState<UserInvitationResult | null>(null);
 
+  const [operatingCostActionLoading, setOperatingCostActionLoading] = useState(false);
   const [bankingActionLoading, setBankingActionLoading] = useState(false);
   const [documentActionLoading, setDocumentActionLoading] = useState(false);
   const [selectedDocumentFile, setSelectedDocumentFile] = useState<File | null>(null);
@@ -827,6 +858,56 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
       await loadDashboardData();
     } catch {
       setLoadError("Nebenkostenposition konnte nicht gespeichert werden.");
+    }
+  }
+
+  async function handleFinalizeOperatingCostPeriod() {
+    if (!selectedOperatingCostPeriodId) {
+      setLoadError("Bitte zuerst eine Nebenkostenperiode auswählen.");
+      return;
+    }
+    setOperatingCostActionLoading(true);
+    setLoadError(null);
+    try {
+      await finalizeOperatingCostPeriod(selectedOperatingCostPeriodId);
+      await loadDashboardData();
+      await loadOperatingCostPeriodDetails(selectedOperatingCostPeriodId);
+    } catch {
+      setLoadError("Nebenkostenperiode konnte nicht finalisiert werden.");
+    } finally {
+      setOperatingCostActionLoading(false);
+    }
+  }
+
+  async function handleDownloadOperatingCostExport(format: "csv" | "pdf") {
+    if (!selectedOperatingCostPeriodId) {
+      setLoadError("Bitte zuerst eine Nebenkostenperiode auswählen.");
+      return;
+    }
+    setOperatingCostActionLoading(true);
+    setLoadError(null);
+    try {
+      const selectedPeriod = operatingCostPeriods.find(
+        (period) => period.id === selectedOperatingCostPeriodId,
+      );
+      const filenameBase = selectedPeriod?.name
+        ? selectedPeriod.name.toLowerCase().replace(/[^a-z0-9]+/gi, "-")
+        : selectedOperatingCostPeriodId;
+      if (format === "csv") {
+        const file = await downloadOperatingCostSettlementCsv(selectedOperatingCostPeriodId);
+        triggerBlobDownload(file, `${filenameBase || "operating-cost-settlement"}.csv`);
+      } else {
+        const file = await downloadOperatingCostSettlementPdf(selectedOperatingCostPeriodId);
+        triggerBlobDownload(file, `${filenameBase || "operating-cost-settlement"}.pdf`);
+      }
+    } catch {
+      setLoadError(
+        format === "csv"
+          ? "Nebenkostenabrechnung konnte nicht als CSV exportiert werden."
+          : "Nebenkostenabrechnung konnte nicht als PDF exportiert werden.",
+      );
+    } finally {
+      setOperatingCostActionLoading(false);
     }
   }
 
@@ -2727,8 +2808,10 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
                           }
                           fullWidth
                         >
-                          <MenuItem value="area">Nach Fläche</MenuItem>
-                          <MenuItem value="unit_count">Gleichmäßig je Vertrag</MenuItem>
+                          <MenuItem value="area">Nach Fläche und Tagen</MenuItem>
+                          <MenuItem value="unit_count">Gleichmäßig je Einheit und Tagen</MenuItem>
+                          <MenuItem value="occupancy_days">Nach Belegungstagen</MenuItem>
+                          <MenuItem value="advance_share">Nach Vorauszahlungsanteil</MenuItem>
                         </TextField>
                         <TextField
                           label="Betrag"
@@ -2860,6 +2943,50 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
                   </Typography>
                 ) : (
                   <Stack spacing={2}>
+                    <Stack
+                      direction={{ xs: "column", md: "row" }}
+                      spacing={1}
+                      justifyContent="space-between"
+                    >
+                      <Typography color="text.secondary" variant="body2">
+                        Status:{" "}
+                        {formatStatusLabel(
+                          operatingCostPreview?.period.status ??
+                            operatingCostPeriods.find(
+                              (period) => period.id === selectedOperatingCostPeriodId,
+                            )?.status ??
+                            "draft",
+                        )}
+                      </Typography>
+                      <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+                        {canManageData ? (
+                          <Button
+                            size="small"
+                            variant="contained"
+                            onClick={handleFinalizeOperatingCostPeriod}
+                            disabled={operatingCostActionLoading}
+                          >
+                            Finalisieren
+                          </Button>
+                        ) : null}
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          onClick={() => void handleDownloadOperatingCostExport("csv")}
+                          disabled={operatingCostActionLoading}
+                        >
+                          CSV Export
+                        </Button>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          onClick={() => void handleDownloadOperatingCostExport("pdf")}
+                          disabled={operatingCostActionLoading}
+                        >
+                          PDF Export
+                        </Button>
+                      </Stack>
+                    </Stack>
                     <Typography color="text.secondary" variant="body2">
                       Positionen: {operatingCostItems.length} · Umlagefähige Summe:{" "}
                       {formatCurrency(operatingCostPreview?.total_billable_amount ?? 0)}
@@ -2869,10 +2996,10 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
                     </Typography>
                     <List dense>
                       {(operatingCostPreview?.lines ?? []).map((line) => (
-                        <ListItem key={line.contract_id} disableGutters>
+                        <ListItem key={`${line.line_type}-${line.contract_id ?? line.unit_id}`} disableGutters>
                           <ListItemText
-                            primary={`${line.tenant_name} · ${line.unit_name}`}
-                            secondary={`Anteil ${formatCurrency(line.share_amount)} · Vorauszahlung ${formatCurrency(line.advance_paid_amount)} · Saldo ${formatCurrency(line.balance_amount)}`}
+                            primary={`${line.tenant_name ?? "Leerstand"} · ${line.unit_name}`}
+                            secondary={`${line.line_type === "vacancy" ? "Leerstand" : "Vertrag"} · ${line.occupied_days} Tage · Anteil ${formatCurrency(line.share_amount)} · Vorauszahlung ${formatCurrency(line.advance_paid_amount)} · Saldo ${formatCurrency(line.balance_amount)}`}
                           />
                         </ListItem>
                       ))}
@@ -2889,7 +3016,7 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
                         <ListItem key={item.id} disableGutters>
                           <ListItemText
                             primary={`${item.category} · ${formatCurrency(item.amount)}`}
-                            secondary={`${item.description ?? "Ohne Beschreibung"} · ${item.allocation_method} · ${item.billable ? "umlagefähig" : "nicht umlagefähig"}`}
+                            secondary={`${item.description ?? "Ohne Beschreibung"} · ${formatAllocationMethodLabel(item.allocation_method)} · ${item.billable ? "umlagefähig" : "nicht umlagefähig"}`}
                           />
                         </ListItem>
                       ))}

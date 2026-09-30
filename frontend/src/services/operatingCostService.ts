@@ -22,12 +22,14 @@ export type OperatingCostItem = {
 };
 
 export type OperatingCostSettlementLine = {
-  contract_id: string;
-  tenant_id: string;
-  tenant_name: string;
+  line_type: string;
+  contract_id?: string | null;
+  tenant_id?: string | null;
+  tenant_name?: string | null;
   unit_id: string;
   unit_name: string;
   allocation_factor: number;
+  occupied_days: number;
   share_amount: number;
   advance_paid_amount: number;
   balance_amount: number;
@@ -85,5 +87,26 @@ export async function getOperatingCostSettlementPreview(periodId: string) {
   const response = await apiClient.get<OperatingCostSettlementPreview>(
     `/operating-costs/periods/${periodId}/settlement-preview`,
   );
+  return response.data;
+}
+
+export async function finalizeOperatingCostPeriod(periodId: string) {
+  const response = await apiClient.post<OperatingCostPeriod>(
+    `/operating-costs/periods/${periodId}/finalize`,
+  );
+  return response.data;
+}
+
+export async function downloadOperatingCostSettlementCsv(periodId: string) {
+  const response = await apiClient.get<Blob>(`/operating-costs/periods/${periodId}/export.csv`, {
+    responseType: "blob",
+  });
+  return response.data;
+}
+
+export async function downloadOperatingCostSettlementPdf(periodId: string) {
+  const response = await apiClient.get<Blob>(`/operating-costs/periods/${periodId}/export.pdf`, {
+    responseType: "blob",
+  });
   return response.data;
 }

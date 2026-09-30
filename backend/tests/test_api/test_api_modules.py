@@ -3,6 +3,8 @@ from io import BytesIO
 from datetime import date, timedelta
 from unittest.mock import patch
 
+from pypdf import PdfReader
+
 from app.ml.invoice_ocr import extract_invoice_metadata
 from app.tasks.document_tasks import process_document_ocr_job
 from app.core.security import get_password_hash
@@ -2452,13 +2454,240 @@ def test_operating_cost_periods_items_and_settlement_preview(
     assert second_line["share_amount"] == 275
     assert second_line["advance_paid_amount"] == 300
     assert second_line["balance_amount"] == -25
+    assert first_line["occupied_days"] == 90
+    assert second_line["occupied_days"] == 90
+
+    finalize_response = client.post(
+        f"/api/v1/operating-costs/periods/{period_id}/finalize",
+        headers=auth_headers,
+    )
+    assert finalize_response.status_code == 200
+    assert finalize_response.json()["status"] == "finalized"
+
+    viewer_finalize_response = client.post(
+        f"/api/v1/operating-costs/periods/{period_id}/finalize",
+        headers=viewer_auth_headers,
+    )
+    assert viewer_finalize_response.status_code == 403
+
+    csv_export_response = client.get(
+        f"/api/v1/operating-costs/periods/{period_id}/export.csv",
+        headers=auth_headers,
+    )
+    assert csv_export_response.status_code == 200
+    assert "settlement_lines" in csv_export_response.text
+    assert "Wohnung A" in csv_export_response.text
+
+    pdf_export_response = client.get(
+        f"/api/v1/operating-costs/periods/{period_id}/export.pdf",
+        headers=auth_headers,
+    )
+    assert pdf_export_response.status_code == 200
+    assert pdf_export_response.headers["content-type"] == "application/pdf"
+    pdf_reader = PdfReader(BytesIO(pdf_export_response.content))
+    extracted_text = "\\n".join(page.extract_text() or "" for page in pdf_reader.pages)
+    assert "PropertyHub Betriebskostenabrechnung" in extracted_text
+    assert "Nebenkosten 2026 Q1" in extracted_text
 
     audit_response = client.get(
         "/api/v1/audit-logs/?resource_type=operating_cost_period",
         headers=auth_headers,
     )
     assert audit_response.status_code == 200
-    assert any(entry["action"] == "operating_cost_period.created" for entry in audit_response.json())
+    audit_actions = {entry["action"] for entry in audit_response.json()}
+    assert "operating_cost_period.created" in audit_actions
+    assert "operating_cost_period.finalized" in audit_actions
+    assert "operating_cost_period.exported_csv" in audit_actions
+    assert "operating_cost_period.exported_pdf" in audit_actions
+
+
+def test_operating_cost_preview_supports_vacancy_partial_year_and_advanced_allocation_methods(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    property_response = client.post(
+        "/api/v1/properties/",
+        headers=auth_headers,
+        json={
+            "name": "Mehrfamilienhaus Süd",
+            "property_type": "residential",
+            "street": "Umlagestraße 3",
+            "postal_code": "50667",
+            "city": "Köln",
+            "purchase_price": 750000,
+        },
+    )
+    property_id = property_response.json()["id"]
+
+    unit_a_response = client.post(
+        "/api/v1/units/",
+        headers=auth_headers,
+        json={
+            "property_id": property_id,
+            "name": "Wohnung 1",
+            "unit_type": "apartment",
+            "status": "occupied",
+            "area_sqm": 50,
+        },
+    )
+    unit_b_response = client.post(
+        "/api/v1/units/",
+        headers=auth_headers,
+        json={
+            "property_id": property_id,
+            "name": "Wohnung 2",
+            "unit_type": "apartment",
+            "status": "occupied",
+            "area_sqm": 100,
+        },
+    )
+    unit_a_id = unit_a_response.json()["id"]
+    unit_b_id = unit_b_response.json()["id"]
+
+    tenant_a_response = client.post(
+        "/api/v1/tenants/",
+        headers=auth_headers,
+        json={
+            "first_name": "Clara",
+            "last_name": "Kurz",
+            "email": "clara.kurz@example.com",
+            "phone": None,
+            "move_in_date": "2026-01-01",
+            "move_out_date": None,
+        },
+    )
+    tenant_b_response = client.post(
+        "/api/v1/tenants/",
+        headers=auth_headers,
+        json={
+            "first_name": "David",
+            "last_name": "Spät",
+            "email": "david.spaet@example.com",
+            "phone": None,
+            "move_in_date": "2026-02-15",
+            "move_out_date": None,
+        },
+    )
+
+    client.post(
+        "/api/v1/contracts/",
+        headers=auth_headers,
+        json={
+            "unit_id": unit_a_id,
+            "tenant_id": tenant_a_response.json()["id"],
+            "start_date": "2026-01-01",
+            "end_date": None,
+            "cold_rent": 850,
+            "service_charge_advance": 100,
+        },
+    )
+    client.post(
+        "/api/v1/contracts/",
+        headers=auth_headers,
+        json={
+            "unit_id": unit_b_id,
+            "tenant_id": tenant_b_response.json()["id"],
+            "start_date": "2026-02-15",
+            "end_date": None,
+            "cold_rent": 1100,
+            "service_charge_advance": 200,
+        },
+    )
+
+    period_response = client.post(
+        "/api/v1/operating-costs/periods",
+        headers=auth_headers,
+        json={
+            "property_id": property_id,
+            "name": "Nebenkosten 2026 Q1 Teiljahr",
+            "period_start": "2026-01-01",
+            "period_end": "2026-03-31",
+            "status": "draft",
+        },
+    )
+    assert period_response.status_code == 201
+    period_id = period_response.json()["id"]
+
+    for item_payload in [
+        {
+            "category": "heating",
+            "description": "Flächenabhängige Heizkosten",
+            "allocation_method": "area",
+            "amount": 360,
+            "billable": True,
+        },
+        {
+            "category": "janitor",
+            "description": "Hausmeister nach Einheit",
+            "allocation_method": "unit_count",
+            "amount": 90,
+            "billable": True,
+        },
+        {
+            "category": "lighting",
+            "description": "Allgemeinstrom nach Belegungstagen",
+            "allocation_method": "occupancy_days",
+            "amount": 180,
+            "billable": True,
+        },
+        {
+            "category": "water",
+            "description": "Wasser nach Vorauszahlungsanteil",
+            "allocation_method": "advance_share",
+            "amount": 270,
+            "billable": True,
+        },
+    ]:
+        item_response = client.post(
+            f"/api/v1/operating-costs/periods/{period_id}/items",
+            headers=auth_headers,
+            json=item_payload,
+        )
+        assert item_response.status_code == 201
+
+    preview_response = client.get(
+        f"/api/v1/operating-costs/periods/{period_id}/settlement-preview",
+        headers=auth_headers,
+    )
+    assert preview_response.status_code == 200
+    preview_payload = preview_response.json()
+
+    assert preview_payload["total_billable_amount"] == 900
+    assert preview_payload["total_advance_amount"] == 600
+    assert len(preview_payload["lines"]) == 3
+
+    unit_1_line = next(
+        line
+        for line in preview_payload["lines"]
+        if line["unit_name"] == "Wohnung 1" and line["line_type"] == "contract"
+    )
+    unit_2_contract_line = next(
+        line
+        for line in preview_payload["lines"]
+        if line["unit_name"] == "Wohnung 2" and line["line_type"] == "contract"
+    )
+    vacancy_line = next(
+        line
+        for line in preview_payload["lines"]
+        if line["unit_name"] == "Wohnung 2" and line["line_type"] == "vacancy"
+    )
+
+    assert unit_1_line["occupied_days"] == 90
+    assert unit_1_line["tenant_name"] == "Clara Kurz"
+    assert unit_1_line["share_amount"] == 420
+    assert unit_1_line["advance_paid_amount"] == 300
+    assert unit_1_line["balance_amount"] == 120
+
+    assert unit_2_contract_line["occupied_days"] == 45
+    assert unit_2_contract_line["tenant_name"] == "David Spät"
+    assert unit_2_contract_line["share_amount"] == 337.5
+    assert unit_2_contract_line["advance_paid_amount"] == 300
+    assert unit_2_contract_line["balance_amount"] == 37.5
+
+    assert vacancy_line["occupied_days"] == 45
+    assert vacancy_line["tenant_name"] == "Leerstand"
+    assert vacancy_line["share_amount"] == 142.5
+    assert vacancy_line["advance_paid_amount"] == 0
+    assert vacancy_line["balance_amount"] == 142.5
 
 
 def test_banking_csv_import_deduplicates_and_auto_matches_payment(

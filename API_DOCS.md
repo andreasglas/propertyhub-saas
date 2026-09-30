@@ -148,6 +148,9 @@ Die folgenden Module sind als strukturierte Einstiegspunkte vorhanden:
 - `DELETE /api/v1/operating-costs/periods/{period_id}`
 - `GET /api/v1/operating-costs/periods/{period_id}/items`
 - `POST /api/v1/operating-costs/periods/{period_id}/items`
+- `POST /api/v1/operating-costs/periods/{period_id}/finalize`
+- `GET /api/v1/operating-costs/periods/{period_id}/export.csv`
+- `GET /api/v1/operating-costs/periods/{period_id}/export.pdf`
 - `PUT /api/v1/operating-costs/items/{item_id}`
 - `DELETE /api/v1/operating-costs/items/{item_id}`
 - `GET /api/v1/operating-costs/periods/{period_id}/settlement-preview`
@@ -163,9 +166,12 @@ Alle Antworten liefern im Initial-Setup einen statusorientierten Payload, damit 
 ## Nebenkosten und Betriebskosten
 
 - Nebenkostenperioden sind immobilienbezogen und mandantenfähig.
-- Positionen innerhalb einer Periode unterstützen aktuell die Umlageschlüssel `area` und `unit_count`.
-- Die Abrechnungsvorschau berücksichtigt überlappende aktive Verträge, vorhandene Wohnflächen und hinterlegte Vorauszahlungen aus dem Mietvertrag.
+- Positionen innerhalb einer Periode unterstützen aktuell die Umlageschlüssel `area`, `unit_count`, `occupancy_days` und `advance_share`.
+- Die Abrechnungsvorschau berücksichtigt überlappende aktive Verträge, Teiljahreszeiträume, Leerstandstage, vorhandene Wohnflächen und hinterlegte Vorauszahlungen aus dem Mietvertrag.
 - `GET /api/v1/operating-costs/periods/{period_id}/settlement-preview` liefert eine Vorschau je Vertrag/Wohneinheit mit Kostenanteil, geleisteter Vorauszahlung und Saldo.
+- Leerstand wird in der Vorschau als eigene Zeile pro Einheit ausgewiesen.
+- `POST /api/v1/operating-costs/periods/{period_id}/finalize` markiert eine Periode als finalisiert.
+- `GET /api/v1/operating-costs/periods/{period_id}/export.csv` und `GET /api/v1/operating-costs/periods/{period_id}/export.pdf` exportieren die Betriebskostenabrechnung.
 
 ## Dokumente und OCR
 
