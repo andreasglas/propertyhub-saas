@@ -9,6 +9,7 @@ from app.schemas.invoice import InvoiceRead
 class DocumentRead(BaseModel):
     id: str
     organization_id: str
+    created_at: datetime | None = None
     related_model: str
     related_id: str
     document_type: str

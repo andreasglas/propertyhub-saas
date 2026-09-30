@@ -10,9 +10,12 @@ from app.db.models.payment import Payment
 from app.db.models.payment_reminder import PaymentReminder
 from app.db.models.property import Property
 from app.db.models.task import Task
+from app.db.models.task_comment import TaskComment
+from app.db.models.task_template import TaskTemplate
 from app.db.models.tenant import Tenant
 from app.db.models.unit import Unit
 from app.db.models.user import User
+from app.db.models.vendor import Vendor
 
 __all__ = [
     "AccountingEntry",
@@ -27,7 +30,10 @@ __all__ = [
     "PaymentReminder",
     "Property",
     "Task",
+    "TaskComment",
+    "TaskTemplate",
     "Tenant",
     "Unit",
     "User",
+    "Vendor",
 ]

@@ -2693,6 +2693,33 @@ def test_operating_cost_preview_supports_vacancy_partial_year_and_advanced_alloc
 def test_tasks_crud_scoping_and_permissions(
     client: TestClient, auth_headers: dict[str, str], viewer_auth_headers: dict[str, str]
 ) -> None:
+    create_vendor_response = client.post(
+        "/api/v1/vendors/",
+        headers=auth_headers,
+        json={
+            "name": "Wärme Service GmbH",
+            "service_type": "maintenance",
+            "contact_email": "service@example.com",
+            "contact_phone": "+49 30 999999",
+            "notes": "24/7 Notdienst",
+        },
+    )
+    assert create_vendor_response.status_code == 201
+    vendor_id = create_vendor_response.json()["id"]
+
+    viewer_vendor_response = client.post(
+        "/api/v1/vendors/",
+        headers=viewer_auth_headers,
+        json={
+            "name": "Nicht erlaubt",
+            "service_type": "other",
+            "contact_email": None,
+            "contact_phone": None,
+            "notes": None,
+        },
+    )
+    assert viewer_vendor_response.status_code == 403
+
     property_response = client.post(
         "/api/v1/properties/",
         headers=auth_headers,
@@ -2726,6 +2753,7 @@ def test_tasks_crud_scoping_and_permissions(
         json={
             "property_id": property_id,
             "unit_id": unit_id,
+            "vendor_id": vendor_id,
             "title": "Heizung prüfen",
             "description": "Thermostate kontrollieren und Wartung terminieren",
             "category": "maintenance",
@@ -2741,6 +2769,7 @@ def test_tasks_crud_scoping_and_permissions(
     task_id = task_payload["id"]
     assert task_payload["property_id"] == property_id
     assert task_payload["unit_id"] == unit_id
+    assert task_payload["vendor_id"] == vendor_id
 
     viewer_create_response = client.post(
         "/api/v1/tasks/",
@@ -2765,6 +2794,7 @@ def test_tasks_crud_scoping_and_permissions(
         json={
             "property_id": property_id,
             "unit_id": unit_id,
+            "vendor_id": vendor_id,
             "title": "Heizung prüfen",
             "description": "Termin mit Fachfirma bestätigt",
             "category": "maintenance",
@@ -2779,12 +2809,64 @@ def test_tasks_crud_scoping_and_permissions(
     assert update_task_response.json()["status"] == "in_progress"
     assert update_task_response.json()["priority"] == "urgent"
 
+    create_comment_response = client.post(
+        f"/api/v1/tasks/{task_id}/comments",
+        headers=auth_headers,
+        json={"message": "Techniker für Donnerstag bestätigt"},
+    )
+    assert create_comment_response.status_code == 201
+    assert create_comment_response.json()["author_email"] == "admin@example.com"
+
+    viewer_comment_response = client.post(
+        f"/api/v1/tasks/{task_id}/comments",
+        headers=viewer_auth_headers,
+        json={"message": "Nicht erlaubt"},
+    )
+    assert viewer_comment_response.status_code == 403
+
+    list_comments_response = client.get(
+        f"/api/v1/tasks/{task_id}/comments",
+        headers=auth_headers,
+    )
+    assert list_comments_response.status_code == 200
+    assert list_comments_response.json()[0]["message"] == "Techniker für Donnerstag bestätigt"
+
+    upload_attachment_response = client.post(
+        "/api/v1/documents/upload",
+        headers=auth_headers,
+        data={
+            "related_model": "task",
+            "related_id": task_id,
+            "document_type": "task_attachment",
+        },
+        files={"file": ("auftrag.txt", BytesIO(b"Wartungsprotokoll"), "text/plain")},
+    )
+    assert upload_attachment_response.status_code == 201
+
+    attachments_response = client.get(
+        f"/api/v1/tasks/{task_id}/attachments",
+        headers=auth_headers,
+    )
+    assert attachments_response.status_code == 200
+    assert attachments_response.json()[0]["file_name"] == "auftrag.txt"
+
+    history_response = client.get(
+        f"/api/v1/tasks/{task_id}/history",
+        headers=auth_headers,
+    )
+    assert history_response.status_code == 200
+    history_types = {entry["entry_type"] for entry in history_response.json()}
+    assert "audit" in history_types
+    assert "comment" in history_types
+    assert "attachment" in history_types
+
     viewer_update_response = client.put(
         f"/api/v1/tasks/{task_id}",
         headers=viewer_auth_headers,
         json={
             "property_id": property_id,
             "unit_id": unit_id,
+            "vendor_id": vendor_id,
             "title": "Heizung prüfen",
             "description": "Nicht erlaubt",
             "category": "maintenance",
@@ -2848,11 +2930,39 @@ def test_tasks_crud_scoping_and_permissions(
     assert other_task_response.status_code == 201
     other_task_id = other_task_response.json()["id"]
 
+    template_response = client.post(
+        "/api/v1/tasks/templates",
+        headers=auth_headers,
+        json={
+            "property_id": property_id,
+            "unit_id": unit_id,
+            "vendor_id": vendor_id,
+            "title": "Filterwechsel",
+            "description": "Monatliche Routineprüfung",
+            "category": "maintenance",
+            "priority": "medium",
+            "recurrence_frequency": "monthly",
+            "next_due_date": date.today().isoformat(),
+            "assignee_name": "Wärme Service GmbH",
+            "active": True,
+        },
+    )
+    assert template_response.status_code == 201
+
+    generate_tasks_response = client.post(
+        "/api/v1/tasks/templates/generate-due",
+        headers=auth_headers,
+    )
+    assert generate_tasks_response.status_code == 200
+    assert generate_tasks_response.json()["generated_count"] == 1
+    assert generate_tasks_response.json()["tasks"][0]["source"] == "recurring"
+
     own_tasks_response = client.get("/api/v1/tasks/", headers=auth_headers)
     assert own_tasks_response.status_code == 200
     own_task_ids = {task["id"] for task in own_tasks_response.json()}
     assert task_id in own_task_ids
     assert other_task_id not in own_task_ids
+    assert len(own_tasks_response.json()) >= 2
 
     audit_response = client.get("/api/v1/audit-logs/?resource_type=task", headers=auth_headers)
     assert audit_response.status_code == 200

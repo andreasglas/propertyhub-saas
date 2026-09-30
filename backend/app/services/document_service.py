@@ -11,6 +11,7 @@ from app.core.exceptions import PropertyHubError
 from app.db.models.document import Document
 from app.db.models.invoice import Invoice
 from app.db.models.property import Property
+from app.db.models.task import Task
 from app.ml.invoice_ocr import extract_invoice_metadata
 from app.schemas.document import DocumentReviewUpdate
 
@@ -30,6 +31,7 @@ class DocumentService:
         model_map = {
             "invoice": Invoice,
             "property": Property,
+            "task": Task,
         }
         model = model_map.get(related_model)
         if model is None:

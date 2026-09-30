@@ -3,6 +3,7 @@ import { apiClient } from "./apiClient";
 export type DocumentRecord = {
   id: string;
   organization_id: string;
+  created_at?: string;
   related_model: string;
   related_id: string;
   document_type: string;

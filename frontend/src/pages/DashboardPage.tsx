@@ -75,7 +75,23 @@ import {
   listProperties,
 } from "../services/propertyService";
 import { DashboardReport, getDashboardReport } from "../services/reportService";
-import { createTask, deleteTask, listTasks, TaskItem, updateTask } from "../services/taskService";
+import {
+  createTask,
+  createTaskComment,
+  createTaskTemplate,
+  deleteTask,
+  generateDueTasks,
+  listTaskAttachments,
+  listTaskComments,
+  listTaskHistory,
+  listTaskTemplates,
+  listTasks,
+  TaskComment,
+  TaskHistoryEntry,
+  TaskItem,
+  TaskTemplate,
+  updateTask,
+} from "../services/taskService";
 import {
   Tenant,
   createTenant,
@@ -86,6 +102,7 @@ import {
   createUnit,
   listUnits,
 } from "../services/unitService";
+import { createVendor, listVendors, Vendor } from "../services/vendorService";
 import {
   inviteUser,
   listUsers,
@@ -404,6 +421,12 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [tasks, setTasks] = useState<TaskItem[]>([]);
+  const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [taskTemplates, setTaskTemplates] = useState<TaskTemplate[]>([]);
+  const [selectedTaskId, setSelectedTaskId] = useState("");
+  const [taskComments, setTaskComments] = useState<TaskComment[]>([]);
+  const [taskHistory, setTaskHistory] = useState<TaskHistoryEntry[]>([]);
+  const [taskAttachments, setTaskAttachments] = useState<DocumentRecord[]>([]);
   const [operatingCostPeriods, setOperatingCostPeriods] = useState<OperatingCostPeriod[]>([]);
   const [operatingCostItems, setOperatingCostItems] = useState<OperatingCostItem[]>([]);
   const [selectedOperatingCostPeriodId, setSelectedOperatingCostPeriodId] = useState("");
@@ -422,6 +445,7 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
   const [bankingActionLoading, setBankingActionLoading] = useState(false);
   const [documentActionLoading, setDocumentActionLoading] = useState(false);
   const [selectedDocumentFile, setSelectedDocumentFile] = useState<File | null>(null);
+  const [selectedTaskAttachmentFile, setSelectedTaskAttachmentFile] = useState<File | null>(null);
 
   const [propertyForm, setPropertyForm] = useState({
     name: "",
@@ -457,6 +481,7 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
   const [taskForm, setTaskForm] = useState({
     property_id: "",
     unit_id: "",
+    vendor_id: "",
     title: "",
     description: "",
     category: "maintenance",
@@ -465,6 +490,29 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
     due_date: "",
     assignee_name: "",
     source: "manual",
+  });
+  const [taskCommentForm, setTaskCommentForm] = useState({
+    message: "",
+  });
+  const [vendorForm, setVendorForm] = useState({
+    name: "",
+    service_type: "maintenance",
+    contact_email: "",
+    contact_phone: "",
+    notes: "",
+  });
+  const [taskTemplateForm, setTaskTemplateForm] = useState({
+    property_id: "",
+    unit_id: "",
+    vendor_id: "",
+    title: "",
+    description: "",
+    category: "maintenance",
+    priority: "medium",
+    recurrence_frequency: "monthly",
+    next_due_date: "",
+    assignee_name: "",
+    active: "true",
   });
   const [operatingCostPeriodForm, setOperatingCostPeriodForm] = useState({
     property_id: "",
@@ -581,6 +629,8 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
         loadedTenants,
         loadedContracts,
         loadedTasks,
+        loadedVendors,
+        loadedTaskTemplates,
         loadedOperatingCostPeriods,
         loadedEntries,
         loadedAuditLogs,
@@ -597,6 +647,8 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
         listTenants(),
         listContracts(),
         listTasks(),
+        listVendors(),
+        listTaskTemplates(),
         listOperatingCostPeriods(),
         listAccountingEntries(),
         listAuditLogs({ limit: 200 }),
@@ -624,6 +676,8 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
       setTenants(loadedTenants);
       setContracts(loadedContracts);
       setTasks(loadedTasks);
+      setVendors(loadedVendors);
+      setTaskTemplates(loadedTaskTemplates);
       setOperatingCostPeriods(loadedOperatingCostPeriods);
       setEntries(loadedEntries);
       setAuditLogs(loadedAuditLogs);
@@ -868,6 +922,7 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
       await createTask({
         property_id: taskForm.property_id || null,
         unit_id: taskForm.unit_id || null,
+        vendor_id: taskForm.vendor_id || null,
         title: taskForm.title,
         description: taskForm.description || null,
         category: taskForm.category,
@@ -880,6 +935,7 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
       setTaskForm({
         property_id: "",
         unit_id: "",
+        vendor_id: "",
         title: "",
         description: "",
         category: "maintenance",
@@ -895,11 +951,33 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
     }
   }
 
+  async function loadSelectedTaskDetails(taskId: string) {
+    if (!taskId) {
+      setTaskComments([]);
+      setTaskHistory([]);
+      setTaskAttachments([]);
+      return;
+    }
+    try {
+      const [loadedComments, loadedHistory, loadedAttachments] = await Promise.all([
+        listTaskComments(taskId),
+        listTaskHistory(taskId),
+        listTaskAttachments(taskId),
+      ]);
+      setTaskComments(loadedComments);
+      setTaskHistory(loadedHistory);
+      setTaskAttachments(loadedAttachments);
+    } catch {
+      setLoadError("Aufgabendetails konnten nicht geladen werden.");
+    }
+  }
+
   async function handleUpdateTaskStatus(task: TaskItem, status: string) {
     try {
       await updateTask(task.id, {
         property_id: task.property_id ?? null,
         unit_id: task.unit_id ?? null,
+        vendor_id: task.vendor_id ?? null,
         title: task.title,
         description: task.description ?? null,
         category: task.category,
@@ -908,8 +986,12 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
         due_date: task.due_date ?? null,
         assignee_name: task.assignee_name ?? null,
         source: task.source,
+        recurring_template_id: task.recurring_template_id ?? null,
       });
       await loadDashboardData();
+      if (selectedTaskId === task.id) {
+        await loadSelectedTaskDetails(task.id);
+      }
     } catch {
       setLoadError("Aufgabenstatus konnte nicht aktualisiert werden.");
     }
@@ -918,9 +1000,115 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
   async function handleDeleteTask(task: TaskItem) {
     try {
       await deleteTask(task.id);
+      if (selectedTaskId === task.id) {
+        setSelectedTaskId("");
+      }
       await loadDashboardData();
     } catch {
       setLoadError("Aufgabe konnte nicht gelöscht werden.");
+    }
+  }
+
+  async function handleCreateTaskComment(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedTaskId) {
+      setLoadError("Bitte zuerst eine Aufgabe auswählen.");
+      return;
+    }
+    try {
+      await createTaskComment(selectedTaskId, taskCommentForm.message);
+      setTaskCommentForm({ message: "" });
+      await loadSelectedTaskDetails(selectedTaskId);
+      await loadDashboardData();
+    } catch {
+      setLoadError("Kommentar konnte nicht gespeichert werden.");
+    }
+  }
+
+  async function handleUploadTaskAttachment() {
+    if (!selectedTaskId || !selectedTaskAttachmentFile) {
+      setLoadError("Bitte zuerst eine Aufgabe und eine Datei auswählen.");
+      return;
+    }
+    try {
+      await uploadDocument({
+        related_model: "task",
+        related_id: selectedTaskId,
+        document_type: "task_attachment",
+        file: selectedTaskAttachmentFile,
+      });
+      setSelectedTaskAttachmentFile(null);
+      await loadSelectedTaskDetails(selectedTaskId);
+      await loadDashboardData();
+    } catch {
+      setLoadError("Anhang konnte nicht hochgeladen werden.");
+    }
+  }
+
+  async function handleCreateVendor(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    try {
+      await createVendor({
+        name: vendorForm.name,
+        service_type: vendorForm.service_type,
+        contact_email: vendorForm.contact_email || null,
+        contact_phone: vendorForm.contact_phone || null,
+        notes: vendorForm.notes || null,
+      });
+      setVendorForm({
+        name: "",
+        service_type: "maintenance",
+        contact_email: "",
+        contact_phone: "",
+        notes: "",
+      });
+      await loadDashboardData();
+    } catch {
+      setLoadError("Dienstleister konnte nicht gespeichert werden.");
+    }
+  }
+
+  async function handleCreateTaskTemplate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    try {
+      await createTaskTemplate({
+        property_id: taskTemplateForm.property_id || null,
+        unit_id: taskTemplateForm.unit_id || null,
+        vendor_id: taskTemplateForm.vendor_id || null,
+        title: taskTemplateForm.title,
+        description: taskTemplateForm.description || null,
+        category: taskTemplateForm.category,
+        priority: taskTemplateForm.priority,
+        recurrence_frequency: taskTemplateForm.recurrence_frequency,
+        next_due_date: taskTemplateForm.next_due_date,
+        assignee_name: taskTemplateForm.assignee_name || null,
+        active: taskTemplateForm.active === "true",
+      });
+      setTaskTemplateForm({
+        property_id: "",
+        unit_id: "",
+        vendor_id: "",
+        title: "",
+        description: "",
+        category: "maintenance",
+        priority: "medium",
+        recurrence_frequency: "monthly",
+        next_due_date: "",
+        assignee_name: "",
+        active: "true",
+      });
+      await loadDashboardData();
+    } catch {
+      setLoadError("Wiederkehrende Aufgabe konnte nicht gespeichert werden.");
+    }
+  }
+
+  async function handleGenerateDueTasks() {
+    try {
+      await generateDueTasks();
+      await loadDashboardData();
+    } catch {
+      setLoadError("Wiederkehrende Aufgaben konnten nicht erzeugt werden.");
     }
   }
 
@@ -1229,6 +1417,10 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
       ),
     [payments],
   );
+  const vendorNameById = useMemo(
+    () => new Map(vendors.map((vendor) => [vendor.id, vendor.name])),
+    [vendors],
+  );
   const filteredUsers = useMemo(
     () =>
       users.filter((user) =>
@@ -1260,6 +1452,16 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
       value: unit.id,
       label: unitLabelById.get(unit.id) ?? unit.name,
     }));
+  const taskTemplateUnitOptions = units
+    .filter((unit) => !taskTemplateForm.property_id || unit.property_id === taskTemplateForm.property_id)
+    .map((unit) => ({
+      value: unit.id,
+      label: unitLabelById.get(unit.id) ?? unit.name,
+    }));
+  const vendorOptions = vendors.map((vendor) => ({
+    value: vendor.id,
+    label: vendor.name,
+  }));
   const tenantOptions = tenants.map((tenant) => ({
     value: tenant.id,
     label: formatTenantName(tenant),
@@ -1360,6 +1562,7 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
           task.due_date,
           propertyNameById.get(task.property_id ?? ""),
           unitLabelById.get(task.unit_id ?? ""),
+          vendorNameById.get(task.vendor_id ?? ""),
         ]);
         return matchesProperty && matchesStatus && matchesPriority && matchesTaskSearch;
       }),
@@ -1371,6 +1574,7 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
       taskList.status,
       tasks,
       unitLabelById,
+      vendorNameById,
     ],
   );
 
@@ -1514,6 +1718,16 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
     }
     void loadOperatingCostPeriodDetails(selectedOperatingCostPeriodId);
   }, [selectedOperatingCostPeriodId]);
+
+  useEffect(() => {
+    if (!selectedTaskId) {
+      setTaskComments([]);
+      setTaskHistory([]);
+      setTaskAttachments([]);
+      return;
+    }
+    void loadSelectedTaskDetails(selectedTaskId);
+  }, [selectedTaskId]);
 
   const pageTitles: Record<AppRoute, { title: string; subtitle: string }> = {
     overview: {
@@ -3210,6 +3424,24 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
                       ))}
                     </TextField>
                     <TextField
+                      select
+                      label="Dienstleister"
+                      value={taskForm.vendor_id}
+                      onChange={(event) =>
+                        setTaskForm((current) => ({
+                          ...current,
+                          vendor_id: event.target.value,
+                        }))
+                      }
+                    >
+                      <MenuItem value="">Ohne Dienstleister</MenuItem>
+                      {vendorOptions.map((option) => (
+                        <MenuItem key={option.value} value={option.value}>
+                          {option.label}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                    <TextField
                       label="Titel"
                       value={taskForm.title}
                       onChange={(event) =>
@@ -3408,7 +3640,7 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
               }
               renderPrimary={(task) => task.title}
               renderSecondary={(task) =>
-                `${propertyNameById.get(task.property_id ?? "") ?? "Ohne Immobilienbezug"}${task.unit_id ? ` · ${unitLabelById.get(task.unit_id) ?? task.unit_id}` : ""}`
+                `${propertyNameById.get(task.property_id ?? "") ?? "Ohne Immobilienbezug"}${task.unit_id ? ` · ${unitLabelById.get(task.unit_id) ?? task.unit_id}` : ""}${task.vendor_id ? ` · ${vendorNameById.get(task.vendor_id) ?? task.vendor_id}` : ""}`
               }
               renderDetails={(task) => (
                 <Typography color="text.secondary" variant="body2">
@@ -3417,9 +3649,17 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
                   {task.assignee_name ?? "-"}
                 </Typography>
               )}
-              renderActions={(task) =>
-                canManageData ? (
-                  <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+              renderActions={(task) => (
+                <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+                  <Button
+                    size="small"
+                    variant={selectedTaskId === task.id ? "contained" : "outlined"}
+                    onClick={() => setSelectedTaskId(task.id)}
+                  >
+                    Öffnen
+                  </Button>
+                  {canManageData ? (
+                    <>
                     {task.status !== "in_progress" ? (
                       <Button
                         size="small"
@@ -3446,10 +3686,366 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
                     >
                       Löschen
                     </Button>
-                  </Stack>
-                ) : undefined
-              }
+                    </>
+                  ) : null}
+                </Stack>
+              )}
             />
+          </Grid>
+
+          {canManageData ? (
+            <>
+              <Grid item xs={12} md={6}>
+                <Card>
+                  <CardContent>
+                    <Stack
+                      direction={{ xs: "column", md: "row" }}
+                      justifyContent="space-between"
+                      spacing={2}
+                      mb={2}
+                    >
+                      <Typography variant="h6">Wiederkehrende Aufgaben</Typography>
+                      <Button variant="outlined" onClick={() => void handleGenerateDueTasks()}>
+                        Fällige Aufgaben erzeugen
+                      </Button>
+                    </Stack>
+                    <Stack component="form" spacing={2} onSubmit={handleCreateTaskTemplate}>
+                      <TextField
+                        label="Titel"
+                        value={taskTemplateForm.title}
+                        onChange={(event) =>
+                          setTaskTemplateForm((current) => ({
+                            ...current,
+                            title: event.target.value,
+                          }))
+                        }
+                        required
+                      />
+                      <TextField
+                        select
+                        label="Immobilie"
+                        value={taskTemplateForm.property_id}
+                        onChange={(event) =>
+                          setTaskTemplateForm((current) => ({
+                            ...current,
+                            property_id: event.target.value,
+                            unit_id: "",
+                          }))
+                        }
+                      >
+                        <MenuItem value="">Ohne Immobilienbezug</MenuItem>
+                        {propertyOptions.map((option) => (
+                          <MenuItem key={option.value} value={option.value}>
+                            {option.label}
+                          </MenuItem>
+                        ))}
+                      </TextField>
+                      <TextField
+                        select
+                        label="Einheit"
+                        value={taskTemplateForm.unit_id}
+                        onChange={(event) =>
+                          setTaskTemplateForm((current) => ({
+                            ...current,
+                            unit_id: event.target.value,
+                          }))
+                        }
+                      >
+                        <MenuItem value="">Ohne Einheitenbezug</MenuItem>
+                        {taskTemplateUnitOptions.map((option) => (
+                          <MenuItem key={option.value} value={option.value}>
+                            {option.label}
+                          </MenuItem>
+                        ))}
+                      </TextField>
+                      <TextField
+                        select
+                        label="Dienstleister"
+                        value={taskTemplateForm.vendor_id}
+                        onChange={(event) =>
+                          setTaskTemplateForm((current) => ({
+                            ...current,
+                            vendor_id: event.target.value,
+                          }))
+                        }
+                      >
+                        <MenuItem value="">Ohne Dienstleister</MenuItem>
+                        {vendorOptions.map((option) => (
+                          <MenuItem key={option.value} value={option.value}>
+                            {option.label}
+                          </MenuItem>
+                        ))}
+                      </TextField>
+                      <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
+                        <TextField
+                          select
+                          label="Intervall"
+                          value={taskTemplateForm.recurrence_frequency}
+                          onChange={(event) =>
+                            setTaskTemplateForm((current) => ({
+                              ...current,
+                              recurrence_frequency: event.target.value,
+                            }))
+                          }
+                          fullWidth
+                        >
+                          <MenuItem value="weekly">Wöchentlich</MenuItem>
+                          <MenuItem value="monthly">Monatlich</MenuItem>
+                          <MenuItem value="quarterly">Quartalsweise</MenuItem>
+                          <MenuItem value="yearly">Jährlich</MenuItem>
+                        </TextField>
+                        <TextField
+                          label="Nächstes Fälligkeitsdatum"
+                          type="date"
+                          value={taskTemplateForm.next_due_date}
+                          onChange={(event) =>
+                            setTaskTemplateForm((current) => ({
+                              ...current,
+                              next_due_date: event.target.value,
+                            }))
+                          }
+                          InputLabelProps={{ shrink: true }}
+                          fullWidth
+                          required
+                        />
+                      </Stack>
+                      <TextField
+                        label="Zuständig"
+                        value={taskTemplateForm.assignee_name}
+                        onChange={(event) =>
+                          setTaskTemplateForm((current) => ({
+                            ...current,
+                            assignee_name: event.target.value,
+                          }))
+                        }
+                      />
+                      <Button type="submit" variant="contained">
+                        Vorlage speichern
+                      </Button>
+                    </Stack>
+                    <Divider sx={{ my: 2 }} />
+                    <List dense>
+                      {taskTemplates.map((template) => (
+                        <ListItem key={template.id} disableGutters>
+                          <ListItemText
+                            primary={`${template.title} · ${formatStatusLabel(template.recurrence_frequency)}`}
+                            secondary={`${template.next_due_date} · ${template.active ? "aktiv" : "inaktiv"}${template.vendor_id ? ` · ${vendorNameById.get(template.vendor_id) ?? template.vendor_id}` : ""}`}
+                          />
+                        </ListItem>
+                      ))}
+                      {!taskTemplates.length ? (
+                        <Typography color="text.secondary">
+                          Noch keine wiederkehrenden Aufgaben vorhanden.
+                        </Typography>
+                      ) : null}
+                    </List>
+                  </CardContent>
+                </Card>
+              </Grid>
+
+              <Grid item xs={12} md={6}>
+                <Card>
+                  <CardContent>
+                    <Typography variant="h6" gutterBottom>
+                      Dienstleister
+                    </Typography>
+                    <Stack component="form" spacing={2} onSubmit={handleCreateVendor}>
+                      <TextField
+                        label="Name"
+                        value={vendorForm.name}
+                        onChange={(event) =>
+                          setVendorForm((current) => ({
+                            ...current,
+                            name: event.target.value,
+                          }))
+                        }
+                        required
+                      />
+                      <TextField
+                        select
+                        label="Leistungsart"
+                        value={vendorForm.service_type}
+                        onChange={(event) =>
+                          setVendorForm((current) => ({
+                            ...current,
+                            service_type: event.target.value,
+                          }))
+                        }
+                      >
+                        <MenuItem value="maintenance">Wartung</MenuItem>
+                        <MenuItem value="inspection">Prüfung</MenuItem>
+                        <MenuItem value="tenant_request">Mieteranfrage</MenuItem>
+                        <MenuItem value="other">Sonstiges</MenuItem>
+                      </TextField>
+                      <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
+                        <TextField
+                          label="E-Mail"
+                          value={vendorForm.contact_email}
+                          onChange={(event) =>
+                            setVendorForm((current) => ({
+                              ...current,
+                              contact_email: event.target.value,
+                            }))
+                          }
+                          fullWidth
+                        />
+                        <TextField
+                          label="Telefon"
+                          value={vendorForm.contact_phone}
+                          onChange={(event) =>
+                            setVendorForm((current) => ({
+                              ...current,
+                              contact_phone: event.target.value,
+                            }))
+                          }
+                          fullWidth
+                        />
+                      </Stack>
+                      <TextField
+                        label="Notizen"
+                        value={vendorForm.notes}
+                        onChange={(event) =>
+                          setVendorForm((current) => ({
+                            ...current,
+                            notes: event.target.value,
+                          }))
+                        }
+                        multiline
+                        minRows={2}
+                      />
+                      <Button type="submit" variant="contained">
+                        Dienstleister speichern
+                      </Button>
+                    </Stack>
+                    <Divider sx={{ my: 2 }} />
+                    <List dense>
+                      {vendors.map((vendor) => (
+                        <ListItem key={vendor.id} disableGutters>
+                          <ListItemText
+                            primary={`${vendor.name} · ${formatStatusLabel(vendor.service_type)}`}
+                            secondary={`${vendor.contact_email ?? "-"} · ${vendor.contact_phone ?? "-"}`}
+                          />
+                        </ListItem>
+                      ))}
+                    </List>
+                  </CardContent>
+                </Card>
+              </Grid>
+            </>
+          ) : null}
+
+          <Grid item xs={12}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>
+                  Aufgabenworkflow
+                </Typography>
+                {!selectedTaskId ? (
+                  <Typography color="text.secondary">
+                    Bitte eine Aufgabe auswählen, um Kommentare, Historie und Anhänge zu sehen.
+                  </Typography>
+                ) : (
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} md={4}>
+                      <Stack spacing={2}>
+                        <Card variant="outlined">
+                          <CardContent>
+                            <Typography variant="subtitle1" gutterBottom>
+                              Kommentare
+                            </Typography>
+                            {canManageData ? (
+                              <Stack component="form" spacing={2} onSubmit={handleCreateTaskComment}>
+                                <TextField
+                                  label="Kommentar"
+                                  value={taskCommentForm.message}
+                                  onChange={(event) =>
+                                    setTaskCommentForm({ message: event.target.value })
+                                  }
+                                  multiline
+                                  minRows={3}
+                                  required
+                                />
+                                <Button type="submit" variant="contained">
+                                  Kommentar speichern
+                                </Button>
+                              </Stack>
+                            ) : null}
+                            <List dense>
+                              {taskComments.map((comment) => (
+                                <ListItem key={comment.id} disableGutters>
+                                  <ListItemText
+                                    primary={comment.author_email ?? "Unbekannt"}
+                                    secondary={`${comment.created_at} · ${comment.message}`}
+                                  />
+                                </ListItem>
+                              ))}
+                            </List>
+                          </CardContent>
+                        </Card>
+                      </Stack>
+                    </Grid>
+                    <Grid item xs={12} md={4}>
+                      <Card variant="outlined">
+                        <CardContent>
+                          <Typography variant="subtitle1" gutterBottom>
+                            Anhänge
+                          </Typography>
+                          {canManageData ? (
+                            <Stack spacing={2} mb={2}>
+                              <Button variant="outlined" component="label">
+                                Datei auswählen
+                                <input
+                                  hidden
+                                  type="file"
+                                  onChange={(event) =>
+                                    setSelectedTaskAttachmentFile(event.target.files?.[0] ?? null)
+                                  }
+                                />
+                              </Button>
+                              <Typography color="text.secondary" variant="body2">
+                                {selectedTaskAttachmentFile?.name ?? "Keine Datei gewählt"}
+                              </Typography>
+                              <Button variant="contained" onClick={() => void handleUploadTaskAttachment()}>
+                                Anhang hochladen
+                              </Button>
+                            </Stack>
+                          ) : null}
+                          <List dense>
+                            {taskAttachments.map((attachment) => (
+                              <ListItem key={attachment.id} disableGutters>
+                                <ListItemText
+                                  primary={attachment.file_name}
+                                  secondary={`${attachment.document_type} · ${attachment.created_at ?? attachment.ocr_processed_at ?? "-"}`}
+                                />
+                              </ListItem>
+                            ))}
+                          </List>
+                        </CardContent>
+                      </Card>
+                    </Grid>
+                    <Grid item xs={12} md={4}>
+                      <Card variant="outlined">
+                        <CardContent>
+                          <Typography variant="subtitle1" gutterBottom>
+                            Historie
+                          </Typography>
+                          <List dense>
+                            {taskHistory.map((entry) => (
+                              <ListItem key={`${entry.entry_type}-${entry.entry_id}`} disableGutters>
+                                <ListItemText
+                                  primary={`${entry.title} · ${entry.actor_email ?? "System"}`}
+                                  secondary={`${entry.created_at} · ${entry.message}`}
+                                />
+                              </ListItem>
+                            ))}
+                          </List>
+                        </CardContent>
+                      </Card>
+                    </Grid>
+                  </Grid>
+                )}
+              </CardContent>
+            </Card>
           </Grid>
         </Grid>
       ) : null}
