@@ -39,4 +39,7 @@ class BankTransactionMatchRequest(BaseModel):
 
 class BankImportResult(BaseModel):
     imported_count: int
+    duplicate_count: int = 0
+    matched_count: int = 0
+    skipped_count: int = 0
     transactions: list[BankTransactionRead]

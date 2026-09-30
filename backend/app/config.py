@@ -19,7 +19,17 @@ class Settings(BaseSettings):
     celery_task_always_eager: bool = False
     celery_task_eager_propagates: bool = False
     document_storage_dir: str = "./storage/documents"
+    frontend_app_url: str = "http://localhost:5173"
     backend_cors_origins: list[str] = ["http://localhost:5173", "http://localhost:3000"]
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_username: str | None = None
+    smtp_password: SecretStr | None = None
+    smtp_from_email: str | None = None
+    smtp_from_name: str = "PropertyHub"
+    smtp_use_tls: bool = True
+    smtp_use_ssl: bool = False
+    smtp_timeout_seconds: int = 15
     bootstrap_admin_email: str | None = None
     bootstrap_admin_password: SecretStr | None = None
     bootstrap_admin_organization_id: str = "00000000-0000-0000-0000-000000000001"

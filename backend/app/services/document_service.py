@@ -12,6 +12,7 @@ from app.db.models.document import Document
 from app.db.models.invoice import Invoice
 from app.db.models.property import Property
 from app.ml.invoice_ocr import extract_invoice_metadata
+from app.schemas.document import DocumentReviewUpdate
 
 
 class DocumentService:
@@ -98,11 +99,35 @@ class DocumentService:
             related_model=related_model,
             related_id=related_id,
             document_type=document_type,
+            category=document_type,
             file_name=safe_name,
             storage_path=str(target_path),
+            review_status="pending",
             ocr_status="pending",
             ocr_attempt_count=0,
         )
+        db.add(document)
+        db.commit()
+        db.refresh(document)
+        return document
+
+    def review_document(
+        self,
+        db: Session,
+        organization_id: str,
+        document_id: str,
+        reviewer_user_id: str,
+        payload: DocumentReviewUpdate,
+    ) -> Document:
+        document = self.get_document(db, organization_id, document_id)
+        document.category = payload.category.strip() if payload.category else None
+        document.version_label = (
+            payload.version_label.strip() if payload.version_label else None
+        )
+        document.review_status = payload.review_status
+        document.review_notes = payload.review_notes.strip() if payload.review_notes else None
+        document.reviewed_at = datetime.now(timezone.utc)
+        document.reviewed_by = reviewer_user_id
         db.add(document)
         db.commit()
         db.refresh(document)

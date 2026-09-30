@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 from io import BytesIO
+from datetime import date, timedelta
 from unittest.mock import patch
 
 from app.ml.invoice_ocr import extract_invoice_metadata
@@ -2135,3 +2136,187 @@ def test_image_ocr_path_can_extract_invoice_fields() -> None:
     assert result["invoice_date"] == "2026-10-01"
     assert result["gross_amount"] == 333.9
     assert result["source"] == "image_ocr"
+
+
+def test_invitation_tracks_delivery_status_and_setup_url(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    response = client.post(
+        "/api/v1/users/invitations",
+        headers=auth_headers,
+        json={
+            "email": "mailinvite@example.com",
+            "full_name": "Mail Invite",
+            "role": "viewer",
+        },
+    )
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["setup_url"].endswith(payload["invitation_token"])
+    assert payload["user"]["invitation_delivery_status"] == "manual"
+    assert payload["user"]["invitation_last_attempt_at"] is not None
+    assert payload["user"]["invitation_delivery_error"] is None
+
+
+def test_banking_csv_import_deduplicates_and_auto_matches_payment(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    invoice_response = client.post(
+        "/api/v1/invoices/",
+        headers=auth_headers,
+        json={
+            "property_id": None,
+            "vendor_name": "Mieterkonto",
+            "invoice_number": "INV-100",
+            "invoice_date": "2026-09-01",
+            "due_date": "2026-09-05",
+            "gross_amount": 1200,
+            "status": "received",
+        },
+    )
+    invoice_id = invoice_response.json()["id"]
+
+    payment_response = client.post(
+        "/api/v1/payments/",
+        headers=auth_headers,
+        json={
+            "invoice_id": invoice_id,
+            "contract_id": None,
+            "amount": 1200,
+            "booking_date": "2026-09-05",
+            "reference": "Miete INV-100",
+        },
+    )
+    payment_id = payment_response.json()["id"]
+
+    csv_content = (
+        "external_id,account_name,transaction_type,booking_date,value_date,amount,currency,counterparty_name,iban,reference\n"
+        "tx-001,Geschäftskonto,credit,2026-09-05,2026-09-05,1200.00,EUR,Max Mustermann,DE44500105175407324931,Miete INV-100\n"
+        "tx-001,Geschäftskonto,credit,2026-09-05,2026-09-05,1200.00,EUR,Max Mustermann,DE44500105175407324931,Miete INV-100\n"
+        "tx-002,Geschäftskonto,debit,2026-09-06,2026-09-06,85.10,EUR,Stadtwerke,DE89370400440532013000,Abschlag September\n"
+    )
+    response = client.post(
+        "/api/v1/banking/import",
+        headers=auth_headers,
+        files={"file": ("bank.csv", BytesIO(csv_content.encode("utf-8")), "text/csv")},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["imported_count"] == 2
+    assert payload["duplicate_count"] == 1
+    assert payload["matched_count"] == 1
+    matched_transactions = [item for item in payload["transactions"] if item["payment_id"]]
+    assert len(matched_transactions) == 1
+    assert matched_transactions[0]["payment_id"] == payment_id
+    assert matched_transactions[0]["status"] == "matched"
+
+
+def test_overdue_invoices_reminders_and_report_exports(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    invoice_response = client.post(
+        "/api/v1/invoices/",
+        headers=auth_headers,
+        json={
+            "property_id": None,
+            "vendor_name": "Hausverwaltung Nord",
+            "invoice_number": "REM-2026-01",
+            "invoice_date": (date.today() - timedelta(days=20)).isoformat(),
+            "due_date": (date.today() - timedelta(days=10)).isoformat(),
+            "gross_amount": 450,
+            "status": "received",
+        },
+    )
+    assert invoice_response.status_code == 201
+    invoice_id = invoice_response.json()["id"]
+
+    overdue_response = client.get("/api/v1/invoices/overdue", headers=auth_headers)
+    assert overdue_response.status_code == 200
+    overdue_payload = overdue_response.json()
+    assert any(item["id"] == invoice_id and item["days_overdue"] >= 10 for item in overdue_payload)
+
+    with patch(
+        "app.services.invoice_service.NotificationService.send_payment_reminder",
+        return_value="sent",
+    ):
+        reminder_response = client.post(
+            f"/api/v1/invoices/{invoice_id}/reminders",
+            headers=auth_headers,
+            json={"recipient_email": "tenant@example.com", "note": "Bitte um kurzfristige Zahlung"},
+        )
+    assert reminder_response.status_code == 201
+    reminder_payload = reminder_response.json()
+    assert reminder_payload["reminder_level"] == 1
+    assert reminder_payload["status"] == "sent"
+
+    reminder_list_response = client.get(
+        f"/api/v1/invoices/{invoice_id}/reminders",
+        headers=auth_headers,
+    )
+    assert reminder_list_response.status_code == 200
+    assert reminder_list_response.json()[0]["recipient_email"] == "tenant@example.com"
+
+    open_invoices_response = client.get("/api/v1/reports/open-invoices", headers=auth_headers)
+    assert open_invoices_response.status_code == 200
+    report_row = next(item for item in open_invoices_response.json() if item["invoice_id"] == invoice_id)
+    assert report_row["latest_reminder_level"] == 1
+
+    open_invoices_csv_response = client.get(
+        "/api/v1/reports/export/open-invoices.csv", headers=auth_headers
+    )
+    assert open_invoices_csv_response.status_code == 200
+    assert "REM-2026-01" in open_invoices_csv_response.text
+
+    dashboard_csv_response = client.get(
+        "/api/v1/reports/export/dashboard.csv", headers=auth_headers
+    )
+    assert dashboard_csv_response.status_code == 200
+    assert "metric,value" in dashboard_csv_response.text
+
+
+def test_document_review_metadata_can_be_updated(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    property_response = client.post(
+        "/api/v1/properties/",
+        headers=auth_headers,
+        json={
+            "name": "Dokumentenobjekt",
+            "property_type": "residential",
+            "street": "Prüfstraße 9",
+            "postal_code": "10115",
+            "city": "Berlin",
+            "purchase_price": 200000,
+        },
+    )
+    property_id = property_response.json()["id"]
+
+    upload_response = client.post(
+        "/api/v1/documents/upload",
+        headers=auth_headers,
+        data={
+            "related_model": "property",
+            "related_id": property_id,
+            "document_type": "property_record",
+        },
+        files={"file": ("akte.txt", BytesIO(b"Property file"), "text/plain")},
+    )
+    document_id = upload_response.json()["id"]
+
+    review_response = client.patch(
+        f"/api/v1/documents/{document_id}/review",
+        headers=auth_headers,
+        json={
+            "category": "building_record",
+            "version_label": "v2",
+            "review_status": "approved",
+            "review_notes": "Vollstaendig geprueft",
+        },
+    )
+    assert review_response.status_code == 200
+    payload = review_response.json()
+    assert payload["category"] == "building_record"
+    assert payload["version_label"] == "v2"
+    assert payload["review_status"] == "approved"
+    assert payload["review_notes"] == "Vollstaendig geprueft"
+    assert payload["reviewed_by"] is not None

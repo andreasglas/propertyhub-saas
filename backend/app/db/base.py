@@ -5,6 +5,7 @@ from app.db.models.document import Document
 from app.db.models.invoice import Invoice
 from app.db.models.organization import Organization
 from app.db.models.payment import Payment
+from app.db.models.payment_reminder import PaymentReminder
 from app.db.models.property import Property
 from app.db.models.tenant import Tenant
 from app.db.models.unit import Unit
@@ -20,6 +21,7 @@ __all__ = [
     "Invoice",
     "Organization",
     "Payment",
+    "PaymentReminder",
     "Property",
     "Tenant",
     "Unit",

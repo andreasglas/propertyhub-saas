@@ -69,11 +69,11 @@ Aktualisiert Rolle, Aktivstatus, Name und optional Passwort eines Benutzers. Nur
 
 ### `POST /api/v1/users/invitations`
 
-Erstellt einen eingeladenen Benutzer ohne Passwort und liefert einen Setup-Link zurück. Nur `owner`.
+Erstellt einen eingeladenen Benutzer ohne Passwort und liefert Setup-Link und absolute Setup-URL zurück. Wenn SMTP konfiguriert ist, wird direkt eine Einladungsmail versendet; andernfalls wird der Versandstatus als `manual` markiert. Nur `owner`.
 
 ### `POST /api/v1/users/{user_id}/invite`
 
-Erzeugt für einen noch nicht aktivierten Benutzer einen neuen Einladungslink. Nur `owner`.
+Erzeugt für einen noch nicht aktivierten Benutzer einen neuen Einladungslink und triggert einen erneuten Mailversand bzw. manuellen Fallback. Nur `owner`.
 
 ## Fachmodule
 
@@ -101,7 +101,10 @@ Die folgenden Module sind als strukturierte Einstiegspunkte vorhanden:
 - `DELETE /api/v1/contracts/{contract_id}`
 - `GET /api/v1/invoices/`
 - `POST /api/v1/invoices/`
+- `GET /api/v1/invoices/overdue`
 - `GET /api/v1/invoices/{invoice_id}`
+- `GET /api/v1/invoices/{invoice_id}/reminders`
+- `POST /api/v1/invoices/{invoice_id}/reminders`
 - `PUT /api/v1/invoices/{invoice_id}`
 - `DELETE /api/v1/invoices/{invoice_id}`
 - `GET /api/v1/payments/`
@@ -115,11 +118,13 @@ Die folgenden Module sind als strukturierte Einstiegspunkte vorhanden:
 - `PUT /api/v1/banking/transactions/{transaction_id}`
 - `DELETE /api/v1/banking/transactions/{transaction_id}`
 - `POST /api/v1/banking/transactions/{transaction_id}/match-payment`
+- `POST /api/v1/banking/import`
 - `POST /api/v1/banking/import-stub`
 - `GET /api/v1/documents/`
 - `POST /api/v1/documents/upload`
 - `GET /api/v1/documents/{document_id}`
 - `POST /api/v1/documents/{document_id}/process-ocr`
+- `PATCH /api/v1/documents/{document_id}/review`
 - `POST /api/v1/documents/{document_id}/apply-ocr-to-invoice`
 - `GET /api/v1/accounting/`
 - `POST /api/v1/accounting/`
@@ -127,8 +132,11 @@ Die folgenden Module sind als strukturierte Einstiegspunkte vorhanden:
 - `PUT /api/v1/accounting/{entry_id}`
 - `DELETE /api/v1/accounting/{entry_id}`
 - `GET /api/v1/reports/`
+- `GET /api/v1/reports/open-invoices`
+- `GET /api/v1/reports/export/dashboard.csv`
+- `GET /api/v1/reports/export/open-invoices.csv`
 
-Der Reporting-Endpunkt liefert aktuell eine Dashboard-Zusammenfassung mit Zählern und Summen für Immobilien, Verträge, Rechnungen, Zahlungen und Accounting Entries.
+Der Reporting-Endpunkt liefert aktuell eine Dashboard-Zusammenfassung mit Zählern und Summen für Immobilien, Verträge, Rechnungen, Zahlungen und Accounting Entries. Zusätzlich gibt es jetzt eine offene-Posten-Liste sowie CSV-Exporte für Dashboard-Summary und offene Rechnungen.
 
 Schreiboperationen sind aktuell auf die Rollen `owner` und `manager` beschränkt; `viewer` bleibt read-only.
 
@@ -137,20 +145,22 @@ Alle Antworten liefern im Initial-Setup einen statusorientierten Payload, damit 
 ## Dokumente und OCR
 
 - Dokumente können aktuell zu `invoice` oder `property` hochgeladen werden.
+- Dokumente enthalten jetzt zusätzlich Review-Metadaten wie Kategorie, Version, Freigabestatus, Kommentar und Reviewer.
 - Der OCR-Endpunkt unterstützt aktuell pragmatisch:
   - PDF mit eingebettetem Text
   - JPG/JPEG/PNG per Bild-OCR
   - TXT als Entwicklungs-/Fallbackformat
 - `POST /api/v1/documents/{document_id}/process-ocr` startet OCR jetzt asynchron und liefert `202 Accepted`.
 - `POST /api/v1/documents/{document_id}/retry-ocr` startet fehlgeschlagene OCR-Läufe erneut.
+- `PATCH /api/v1/documents/{document_id}/review` dient zur manuellen Nachbearbeitung und Freigabe von Dokumenten.
 - Dokumente enthalten OCR-Statusinformationen inkl. Fehlertext und Versuchszähler.
 - Für echte Hintergrundausführung nutzt OCR Celery mit Redis als Broker/Backend.
 - Der OCR-Pfad extrahiert erste Rechnungsdaten wie Lieferant, Rechnungsnummer, Rechnungsdatum und Bruttobetrag.
 
-## Nächste API-Schritte
+## Neue operative Flows
 
-1. CRUD-Endpunkte pro Fachmodul
-2. Filter-, Such- und Pagination-Standards
-3. Rollen- und Rechteprüfung
-4. OpenAPI-Beispiele je Ressource
-5. Upload- und Async-Endpunkte für Dokumente und OCR
+1. SMTP-basierte Einladungsmails mit Versandstatus
+2. CSV-/CAMT-Bankimport mit Dublettenprüfung
+3. Offene Rechnungen, Fälligkeiten und Reminder-Historie
+4. Dokumenten-Review und manuelle Nachbearbeitung
+5. CSV-Exporte für operative Reports

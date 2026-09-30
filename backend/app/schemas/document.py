@@ -12,8 +12,14 @@ class DocumentRead(BaseModel):
     related_model: str
     related_id: str
     document_type: str
+    category: str | None = None
+    version_label: str | None = None
     file_name: str
     storage_path: str | None = None
+    review_status: str
+    review_notes: str | None = None
+    reviewed_at: datetime | None = None
+    reviewed_by: str | None = None
     ocr_status: str
     ocr_error: str | None = None
     ocr_attempt_count: int
@@ -31,3 +37,10 @@ class DocumentOcrResult(BaseModel):
 class DocumentInvoiceApplyResult(BaseModel):
     document: DocumentRead
     invoice: InvoiceRead
+
+
+class DocumentReviewUpdate(BaseModel):
+    category: str | None = None
+    version_label: str | None = None
+    review_status: str
+    review_notes: str | None = None

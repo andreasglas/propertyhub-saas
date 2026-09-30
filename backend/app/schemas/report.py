@@ -14,3 +14,15 @@ class DashboardReportRead(BaseModel):
     total_payment_amount: float
     total_income_amount: float
     total_expense_amount: float
+
+
+class OpenInvoiceReportRow(BaseModel):
+    invoice_id: str
+    vendor_name: str
+    invoice_number: str | None = None
+    invoice_date: str | None = None
+    due_date: str | None = None
+    gross_amount: float
+    status: str
+    days_overdue: int
+    latest_reminder_level: int = 0

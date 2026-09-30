@@ -22,6 +22,9 @@ class UserRead(BaseModel):
     is_active: bool
     invitation_sent_at: datetime | None = None
     invitation_accepted_at: datetime | None = None
+    invitation_delivery_status: str = "pending"
+    invitation_delivery_error: str | None = None
+    invitation_last_attempt_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 
@@ -51,6 +54,7 @@ class UserInvitationResult(BaseModel):
     user: UserRead
     invitation_token: str
     setup_path: str
+    setup_url: str
 
 
 class InvitationInfo(BaseModel):

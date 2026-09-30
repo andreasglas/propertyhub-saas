@@ -11,10 +11,12 @@ from app.schemas.user import (
     UserRead,
     UserUpdate,
 )
+from app.services.notification_service import NotificationService
 from app.services.user_service import UserService
 
 router = APIRouter()
 service = UserService()
+notification_service = NotificationService()
 
 
 @router.get("/", response_model=list[UserRead])
@@ -49,6 +51,7 @@ async def invite_user(
         user=user,
         invitation_token=invitation_token,
         setup_path=f"/setup-password?token={invitation_token}",
+        setup_url=notification_service.build_setup_url(invitation_token),
     )
 
 
@@ -80,4 +83,5 @@ async def resend_invite(
         user=user,
         invitation_token=invitation_token,
         setup_path=f"/setup-password?token={invitation_token}",
+        setup_url=notification_service.build_setup_url(invitation_token),
     )

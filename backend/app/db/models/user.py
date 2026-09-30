@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, String
+from sqlalchemy import Boolean, DateTime, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.models.base import Base, OrganizationMixin, TimestampMixin, UUIDPrimaryKeyMixin
@@ -17,3 +17,8 @@ class User(Base, UUIDPrimaryKeyMixin, OrganizationMixin, TimestampMixin):
     invitation_token: Mapped[str | None] = mapped_column(String(255), index=True)
     invitation_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     invitation_accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    invitation_delivery_status: Mapped[str] = mapped_column(
+        String(50), nullable=False, default="pending"
+    )
+    invitation_delivery_error: Mapped[str | None] = mapped_column(Text)
+    invitation_last_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

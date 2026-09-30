@@ -109,7 +109,29 @@ Das Frontend nutzt im Development standardmäßig den relativen Pfad `/api`; lok
 - nutzbare Frontend-Bereiche für Immobilien, Einheiten, Mieter, Verträge, Billing, Banking und Dokumente
 - Admin-Bereiche für Organisationsdaten und Benutzerverwaltung mit Rollensteuerung
 - Einladungs- und Passwort-Setup-Flow für neue Benutzer
+- SMTP-fähiger Einladungsversand mit Versandstatus und manuellem Fallback ohne Mailserver
+- CSV-/CAMT-Bankimport mit Dublettenprüfung und erster automatischer Zahlungszuordnung
+- Fälligkeiten, offene Posten, Reminder-Historie und CSV-Reporte für Rechnungen
+- Dokumenten-Review mit Kategorie-, Versions- und Freigabe-Metadaten
 - standardisierte Suche-, Filter- und Pagination-Muster für operative Listen im Dashboard
+
+## Erweiterte Backend-Konfiguration
+
+Für echte Einladungsmails und Zahlungserinnerungen können in `/home/runner/work/propertyhub-saas/propertyhub-saas/backend/.env` SMTP-Daten gesetzt werden:
+
+```env
+FRONTEND_APP_URL=http://localhost:5173
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_USERNAME=mailer@example.com
+SMTP_PASSWORD=replace-me
+SMTP_FROM_EMAIL=mailer@example.com
+SMTP_FROM_NAME=PropertyHub
+SMTP_USE_TLS=true
+SMTP_USE_SSL=false
+```
+
+Ohne SMTP bleibt der Invite-/Reminder-Flow lokal nutzbar und markiert Sendungen automatisch als `manual`.
 
 ## Weiterführende Dokumentation
 

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, File, Response, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_current_user, require_roles
@@ -87,3 +87,18 @@ async def import_stub_transactions(
 ) -> BankImportResult:
     transactions = service.import_stub_transactions(db, current_user.organization_id)
     return BankImportResult(imported_count=len(transactions), transactions=transactions)
+
+
+@router.post("/import", response_model=BankImportResult)
+async def import_transactions(
+    file: UploadFile = File(...),
+    current_user: User = Depends(require_roles("owner", "manager")),
+    db: Session = Depends(get_db),
+) -> BankImportResult:
+    file_bytes = await file.read()
+    return service.import_transactions(
+        db,
+        current_user.organization_id,
+        file_name=file.filename or "bank-import",
+        file_bytes=file_bytes,
+    )

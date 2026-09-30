@@ -1,3 +1,7 @@
+import csv
+import io
+from datetime import date
+
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -5,10 +9,11 @@ from app.db.models.accounting import AccountingEntry
 from app.db.models.contract import Contract
 from app.db.models.invoice import Invoice
 from app.db.models.payment import Payment
+from app.db.models.payment_reminder import PaymentReminder
 from app.db.models.property import Property
 from app.db.models.tenant import Tenant
 from app.db.models.unit import Unit
-from app.schemas.report import DashboardReportRead
+from app.schemas.report import DashboardReportRead, OpenInvoiceReportRow
 
 
 class ReportService:
@@ -74,3 +79,73 @@ class ReportService:
             total_income_amount=total_income_amount,
             total_expense_amount=total_expense_amount,
         )
+
+    def list_open_invoices(
+        self, db: Session, organization_id: str, *, reference_date: date | None = None
+    ) -> list[OpenInvoiceReportRow]:
+        today = reference_date or date.today()
+        invoices = list(
+            db.scalars(
+                select(Invoice)
+                .where(
+                    Invoice.organization_id == organization_id,
+                    Invoice.status != "paid",
+                )
+                .order_by(Invoice.due_date.asc().nullslast(), Invoice.created_at.desc())
+            )
+        )
+        reminder_levels = {
+            invoice_id: int(level or 0)
+            for invoice_id, level in db.execute(
+                select(PaymentReminder.invoice_id, func.max(PaymentReminder.reminder_level))
+                .where(PaymentReminder.organization_id == organization_id)
+                .group_by(PaymentReminder.invoice_id)
+            ).all()
+        }
+        rows: list[OpenInvoiceReportRow] = []
+        for invoice in invoices:
+            days_overdue = 0
+            if invoice.due_date and invoice.due_date < today:
+                days_overdue = (today - invoice.due_date).days
+            rows.append(
+                OpenInvoiceReportRow(
+                    invoice_id=invoice.id,
+                    vendor_name=invoice.vendor_name,
+                    invoice_number=invoice.invoice_number,
+                    invoice_date=invoice.invoice_date.isoformat() if invoice.invoice_date else None,
+                    due_date=invoice.due_date.isoformat() if invoice.due_date else None,
+                    gross_amount=float(invoice.gross_amount),
+                    status=invoice.status,
+                    days_overdue=days_overdue,
+                    latest_reminder_level=reminder_levels.get(invoice.id, 0),
+                )
+            )
+        return rows
+
+    def export_dashboard_summary_csv(self, summary: DashboardReportRead) -> str:
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["metric", "value"])
+        for key, value in summary.model_dump().items():
+            writer.writerow([key, value])
+        return output.getvalue()
+
+    def export_open_invoices_csv(self, rows: list[OpenInvoiceReportRow]) -> str:
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(
+            [
+                "invoice_id",
+                "vendor_name",
+                "invoice_number",
+                "invoice_date",
+                "due_date",
+                "gross_amount",
+                "status",
+                "days_overdue",
+                "latest_reminder_level",
+            ]
+        )
+        for row in rows:
+            writer.writerow(list(row.model_dump().values()))
+        return output.getvalue()

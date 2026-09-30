@@ -10,11 +10,13 @@ from app.db.models.organization import Organization
 from app.db.models.user import User
 from app.schemas.organization import OrganizationUpdate
 from app.schemas.user import UserCreate, UserInvitationCreate, UserUpdate
+from app.services.notification_service import NotificationService
 
 
 class UserService:
     def __init__(self) -> None:
         self.settings = get_settings()
+        self.notification_service = NotificationService()
 
     def get_user_by_email(self, db: Session, email: str) -> User | None:
         return db.scalar(select(User).where(User.email == email))
@@ -112,10 +114,12 @@ class UserService:
             invitation_token=invitation_token,
             invitation_sent_at=datetime.now(timezone.utc),
             invitation_accepted_at=None,
+            invitation_delivery_status="pending",
         )
         db.add(user)
         db.commit()
         db.refresh(user)
+        self._deliver_invitation_email(db, user)
         return user, invitation_token
 
     def resend_invitation(
@@ -129,10 +133,36 @@ class UserService:
         user.invitation_token = invitation_token
         user.invitation_sent_at = datetime.now(timezone.utc)
         user.is_active = False
+        user.invitation_delivery_status = "pending"
+        user.invitation_delivery_error = None
         db.add(user)
         db.commit()
         db.refresh(user)
+        self._deliver_invitation_email(db, user)
         return user, invitation_token
+
+    def _deliver_invitation_email(self, db: Session, user: User) -> User:
+        organization = self.get_organization(db, user.organization_id)
+        user.invitation_last_attempt_at = datetime.now(timezone.utc)
+        try:
+            delivery_status = self.notification_service.send_user_invitation(
+                recipient_email=user.email,
+                recipient_name=user.full_name,
+                organization_name=organization.name,
+                role=user.role,
+                setup_url=self.notification_service.build_setup_url(
+                    user.invitation_token or ""
+                ),
+            )
+            user.invitation_delivery_status = delivery_status
+            user.invitation_delivery_error = None
+        except Exception as exc:
+            user.invitation_delivery_status = "failed"
+            user.invitation_delivery_error = str(exc)[:1000]
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        return user
 
     def get_user_by_invitation_token(self, db: Session, token: str) -> User:
         user = db.scalar(select(User).where(User.invitation_token == token))
