@@ -187,6 +187,7 @@ Alle Antworten liefern im Initial-Setup einen statusorientierten Payload, damit 
 - Aufgaben können zusätzlich einem Dienstleister sowie einer wiederkehrenden Vorlage zugeordnet werden.
 - Unterstützte Kategorien sind aktuell `maintenance`, `inspection`, `tenant_request`, `accounting`, `compliance` und `other`.
 - Status und Priorität werden organisationsbezogen verwaltet und im Audit-Log protokolliert.
+- Aufgaben unterstützen jetzt geplante und tatsächliche Kosten, Abschlussnotizen sowie einen automatisch gesetzten Abschlusszeitpunkt bei Status `done`.
 - `GET /api/v1/tasks/{task_id}/comments` und `POST /api/v1/tasks/{task_id}/comments` bilden den Kommunikationsverlauf je Vorgang ab.
 - `GET /api/v1/tasks/{task_id}/attachments` liefert aufgabenbezogene Dokumente aus dem bestehenden Dokumentenmodul.
 - `GET /api/v1/tasks/{task_id}/history` kombiniert Audit-Events, Kommentare und Anhänge zu einer operativen Verlaufssicht.

@@ -488,7 +488,10 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
     priority: "medium",
     status: "open",
     due_date: "",
+    estimated_cost: "",
+    actual_cost: "",
     assignee_name: "",
+    completion_notes: "",
     source: "manual",
   });
   const [taskCommentForm, setTaskCommentForm] = useState({
@@ -929,7 +932,10 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
         priority: taskForm.priority,
         status: taskForm.status,
         due_date: taskForm.due_date || null,
+        estimated_cost: taskForm.estimated_cost ? Number(taskForm.estimated_cost) : null,
+        actual_cost: taskForm.actual_cost ? Number(taskForm.actual_cost) : null,
         assignee_name: taskForm.assignee_name || null,
+        completion_notes: taskForm.completion_notes || null,
         source: taskForm.source,
       });
       setTaskForm({
@@ -942,7 +948,10 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
         priority: "medium",
         status: "open",
         due_date: "",
+        estimated_cost: "",
+        actual_cost: "",
         assignee_name: "",
+        completion_notes: "",
         source: "manual",
       });
       await loadDashboardData();
@@ -984,7 +993,10 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
         priority: task.priority,
         status,
         due_date: task.due_date ?? null,
+        estimated_cost: task.estimated_cost ?? null,
+        actual_cost: task.actual_cost ?? null,
         assignee_name: task.assignee_name ?? null,
+        completion_notes: task.completion_notes ?? null,
         source: task.source,
         recurring_template_id: task.recurring_template_id ?? null,
       });
@@ -1845,6 +1857,8 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
     { label: "Mieter", value: String(report?.tenants_count ?? tenants.length) },
     { label: "Verträge", value: String(report?.contracts_count ?? contracts.length) },
     { label: "Rechnungen offen", value: String(report?.open_invoices_count ?? 0) },
+    { label: "Aufgaben offen", value: String(report?.open_tasks_count ?? 0) },
+    { label: "Aufgaben überfällig", value: String(report?.overdue_tasks_count ?? 0) },
     { label: "Zahlungen", value: String(report?.payments_count ?? payments.length) },
     { label: "Banktransaktionen", value: String(bankTransactions.length) },
     { label: "Dokumente", value: String(documents.length) },
@@ -1852,11 +1866,16 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
       label: "Accounting Gesamt",
       value: formatCurrency(report?.total_expense_amount ?? totalAccountingAmount),
     },
+    {
+      label: "Task-Kosten Ist",
+      value: formatCurrency(report?.total_actual_task_cost ?? 0),
+    },
   ];
   const pageTitle = pageTitles[currentRoute];
   const invitationUrl = latestInvitation
     ? `${window.location.origin}${latestInvitation.setup_path}`
     : null;
+  const selectedTask = tasks.find((task) => task.id === selectedTaskId) ?? null;
 
   async function handleCopyInvitationLink() {
     if (!invitationUrl) {
@@ -3535,6 +3554,34 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
                         InputLabelProps={{ shrink: true }}
                       />
                     </Stack>
+                    <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
+                      <TextField
+                        label="Kosten geplant"
+                        type="number"
+                        value={taskForm.estimated_cost}
+                        onChange={(event) =>
+                          setTaskForm((current) => ({
+                            ...current,
+                            estimated_cost: event.target.value,
+                          }))
+                        }
+                        fullWidth
+                        inputProps={{ min: 0, step: "0.01" }}
+                      />
+                      <TextField
+                        label="Kosten tatsächlich"
+                        type="number"
+                        value={taskForm.actual_cost}
+                        onChange={(event) =>
+                          setTaskForm((current) => ({
+                            ...current,
+                            actual_cost: event.target.value,
+                          }))
+                        }
+                        fullWidth
+                        inputProps={{ min: 0, step: "0.01" }}
+                      />
+                    </Stack>
                     <TextField
                       label="Zuständig"
                       value={taskForm.assignee_name}
@@ -3544,6 +3591,18 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
                           assignee_name: event.target.value,
                         }))
                       }
+                    />
+                    <TextField
+                      label="Abschlussnotiz"
+                      value={taskForm.completion_notes}
+                      onChange={(event) =>
+                        setTaskForm((current) => ({
+                          ...current,
+                          completion_notes: event.target.value,
+                        }))
+                      }
+                      multiline
+                      minRows={2}
                     />
                     <Box>
                       <Button type="submit" variant="contained">
@@ -3646,7 +3705,8 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
                 <Typography color="text.secondary" variant="body2">
                   {formatStatusLabel(task.category)} · {formatStatusLabel(task.priority)} ·{" "}
                   {formatStatusLabel(task.status)} · Fällig: {task.due_date ?? "-"} · Zuständig:{" "}
-                  {task.assignee_name ?? "-"}
+                  {task.assignee_name ?? "-"} · Plan: {formatCurrency(task.estimated_cost ?? 0)} ·
+                  Ist: {formatCurrency(task.actual_cost ?? 0)}
                 </Typography>
               )}
               renderActions={(task) => (
@@ -3946,6 +4006,27 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
                   </Typography>
                 ) : (
                   <Grid container spacing={2}>
+                    <Grid item xs={12}>
+                      <Card variant="outlined">
+                        <CardContent>
+                          <Typography variant="subtitle1" gutterBottom>
+                            Aufgabenübersicht
+                          </Typography>
+                          <Typography color="text.secondary" variant="body2">
+                            Status: {formatStatusLabel(selectedTask?.status ?? "-")} · Fällig:{" "}
+                            {selectedTask?.due_date ?? "-"} · Abgeschlossen:{" "}
+                            {selectedTask?.completed_at ?? "-"}
+                          </Typography>
+                          <Typography color="text.secondary" variant="body2">
+                            Geplante Kosten: {formatCurrency(selectedTask?.estimated_cost ?? 0)} ·
+                            Tatsächliche Kosten: {formatCurrency(selectedTask?.actual_cost ?? 0)}
+                          </Typography>
+                          <Typography variant="body2" sx={{ mt: 1 }}>
+                            {selectedTask?.completion_notes || "Keine Abschlussnotiz hinterlegt."}
+                          </Typography>
+                        </CardContent>
+                      </Card>
+                    </Grid>
                     <Grid item xs={12} md={4}>
                       <Stack spacing={2}>
                         <Card variant="outlined">

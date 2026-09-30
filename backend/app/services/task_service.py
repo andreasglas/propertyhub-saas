@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -46,6 +46,7 @@ class TaskService:
 
     def create_task(self, db: Session, organization_id: str, payload: TaskCreate) -> Task:
         normalized_payload = self._validate_relations(db, organization_id, payload.model_dump())
+        normalized_payload = self._apply_completion_state(normalized_payload)
         task = Task(organization_id=organization_id, **normalized_payload)
         db.add(task)
         db.commit()
@@ -57,6 +58,7 @@ class TaskService:
     ) -> Task:
         task = self.get_task(db, organization_id, task_id)
         normalized_payload = self._validate_relations(db, organization_id, payload.model_dump())
+        normalized_payload = self._apply_completion_state(normalized_payload, existing_task=task)
         for field, value in normalized_payload.items():
             setattr(task, field, value)
         db.add(task)
@@ -263,7 +265,11 @@ class TaskService:
                 priority=template.priority,
                 status="open",
                 due_date=template.next_due_date,
+                estimated_cost=None,
+                actual_cost=None,
                 assignee_name=template.assignee_name,
+                completion_notes=None,
+                completed_at=None,
                 source="recurring",
             )
             db.add(task)
@@ -351,6 +357,16 @@ class TaskService:
             )
             if vendor is None:
                 raise PropertyHubError("Vendor not found", status_code=404)
+        return payload
+
+    def _apply_completion_state(self, payload: dict, existing_task: Task | None = None) -> dict:
+        status = payload.get("status")
+        existing_completed_at = existing_task.completed_at if existing_task is not None else None
+        if status == "done":
+            payload["completed_at"] = existing_completed_at or datetime.now(timezone.utc)
+        else:
+            payload["completed_at"] = None
+            payload["actual_cost"] = payload.get("actual_cost")
         return payload
 
     def _increment_due_date(self, due_date: date, frequency: str) -> date:

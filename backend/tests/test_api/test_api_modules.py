@@ -1459,6 +1459,44 @@ def test_reports_dashboard_summary_returns_aggregated_metrics(
             "booking_date": "2026-11-06",
         },
     )
+    client.post(
+        "/api/v1/tasks/",
+        headers=auth_headers,
+        json={
+            "property_id": property_id,
+            "unit_id": unit_response.json()["id"],
+            "title": "Wartung Report",
+            "description": "Jährliche Prüfung",
+            "category": "maintenance",
+            "priority": "high",
+            "status": "done",
+            "due_date": "2026-11-04",
+            "estimated_cost": 150,
+            "actual_cost": 175,
+            "assignee_name": "Facility Team",
+            "completion_notes": "Wartung erledigt",
+            "source": "manual",
+        },
+    )
+    client.post(
+        "/api/v1/tasks/",
+        headers=auth_headers,
+        json={
+            "property_id": property_id,
+            "unit_id": unit_response.json()["id"],
+            "title": "Offene Prüfung",
+            "description": "Überfällige Kontrolle",
+            "category": "inspection",
+            "priority": "medium",
+            "status": "open",
+            "due_date": "2026-10-01",
+            "estimated_cost": 80,
+            "actual_cost": None,
+            "assignee_name": "Facility Team",
+            "completion_notes": None,
+            "source": "manual",
+        },
+    )
 
     response = client.get("/api/v1/reports/", headers=auth_headers)
 
@@ -1470,12 +1508,17 @@ def test_reports_dashboard_summary_returns_aggregated_metrics(
     assert payload["contracts_count"] == 1
     assert payload["invoices_count"] == 1
     assert payload["open_invoices_count"] == 1
+    assert payload["open_tasks_count"] == 1
+    assert payload["overdue_tasks_count"] == 1
+    assert payload["completed_tasks_count"] == 1
     assert payload["payments_count"] == 1
     assert payload["accounting_entries_count"] == 2
     assert payload["total_invoice_amount"] == 420
     assert payload["total_payment_amount"] == 420
     assert payload["total_income_amount"] == 1400
     assert payload["total_expense_amount"] == 220
+    assert payload["total_estimated_task_cost"] == 230
+    assert payload["total_actual_task_cost"] == 175
 
 
 def test_reports_dashboard_summary_is_organization_scoped(
@@ -1533,6 +1576,8 @@ def test_reports_dashboard_summary_is_organization_scoped(
     assert payload["properties_count"] == 0
     assert payload["accounting_entries_count"] == 0
     assert payload["total_income_amount"] == 0
+    assert payload["open_tasks_count"] == 0
+    assert payload["total_actual_task_cost"] == 0
 
 
 def test_banking_transactions_crud_and_import_stub(
@@ -2764,7 +2809,10 @@ def test_tasks_crud_scoping_and_permissions(
             "priority": "high",
             "status": "open",
             "due_date": "2026-10-15",
+            "estimated_cost": 180.5,
+            "actual_cost": None,
             "assignee_name": "Hausmeister Team",
+            "completion_notes": None,
             "source": "manual",
         },
     )
@@ -2774,6 +2822,8 @@ def test_tasks_crud_scoping_and_permissions(
     assert task_payload["property_id"] == property_id
     assert task_payload["unit_id"] == unit_id
     assert task_payload["vendor_id"] == vendor_id
+    assert task_payload["estimated_cost"] == 180.5
+    assert task_payload["completed_at"] is None
 
     viewer_create_response = client.post(
         "/api/v1/tasks/",
@@ -2803,15 +2853,20 @@ def test_tasks_crud_scoping_and_permissions(
             "description": "Termin mit Fachfirma bestätigt",
             "category": "maintenance",
             "priority": "urgent",
-            "status": "in_progress",
+            "status": "done",
             "due_date": "2026-10-12",
+            "estimated_cost": 180.5,
+            "actual_cost": 219.9,
             "assignee_name": "Fachfirma Wärme GmbH",
+            "completion_notes": "Thermostate ersetzt und Probelauf erfolgreich abgeschlossen",
             "source": "manual",
         },
     )
     assert update_task_response.status_code == 200
-    assert update_task_response.json()["status"] == "in_progress"
+    assert update_task_response.json()["status"] == "done"
     assert update_task_response.json()["priority"] == "urgent"
+    assert update_task_response.json()["actual_cost"] == 219.9
+    assert update_task_response.json()["completed_at"] is not None
 
     create_comment_response = client.post(
         f"/api/v1/tasks/{task_id}/comments",
@@ -2877,7 +2932,10 @@ def test_tasks_crud_scoping_and_permissions(
             "priority": "low",
             "status": "done",
             "due_date": "2026-10-10",
+            "estimated_cost": 1,
+            "actual_cost": 1,
             "assignee_name": "Viewer",
+            "completion_notes": "Nicht erlaubt",
             "source": "manual",
         },
     )
@@ -2927,7 +2985,10 @@ def test_tasks_crud_scoping_and_permissions(
             "priority": "medium",
             "status": "open",
             "due_date": "2026-11-01",
+            "estimated_cost": 50,
+            "actual_cost": None,
             "assignee_name": "Extern",
+            "completion_notes": None,
             "source": "manual",
         },
     )

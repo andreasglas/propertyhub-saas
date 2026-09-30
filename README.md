@@ -121,6 +121,7 @@ Das Frontend nutzt im Development standardmäßig den relativen Pfad `/api`; lok
 - Aufgabenkommentare, Historie und Dokumentanhänge für echte Wartungs-Workflows
 - wiederkehrende Aufgabenvorlagen mit manueller Erzeugung fälliger Vorgänge
 - automatisierte Erzeugung fälliger wiederkehrender Aufgaben per Celery Beat Scheduler
+- geplante/tatsächliche Task-Kosten sowie Abschlusszeitpunkt und Abschlussnotizen im Wartungsworkflow
 - standardisierte Suche-, Filter- und Pagination-Muster für operative Listen im Dashboard
 
 ## Erweiterte Backend-Konfiguration

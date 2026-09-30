@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from typing import Any
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, Field, model_validator
 
 ALLOWED_TASK_PRIORITIES = {"low", "medium", "high", "urgent"}
 ALLOWED_TASK_STATUSES = {"open", "in_progress", "blocked", "done", "cancelled"}
@@ -26,7 +26,10 @@ class TaskBase(BaseModel):
     priority: str = "medium"
     status: str = "open"
     due_date: date | None = None
+    estimated_cost: float | None = Field(default=None, ge=0)
+    actual_cost: float | None = Field(default=None, ge=0)
     assignee_name: str | None = None
+    completion_notes: str | None = None
     source: str = "manual"
 
     @model_validator(mode="after")
@@ -58,6 +61,7 @@ class TaskRead(TaskBase):
     id: str
     organization_id: str
     recurring_template_id: str | None = None
+    completed_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 

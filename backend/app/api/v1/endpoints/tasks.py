@@ -145,6 +145,9 @@ async def create_task(
             "unit_id": task.unit_id,
             "vendor_id": task.vendor_id,
             "recurring_template_id": task.recurring_template_id,
+            "estimated_cost": task.estimated_cost,
+            "actual_cost": task.actual_cost,
+            "completed_at": task.completed_at,
         },
     )
     return task
@@ -182,6 +185,9 @@ async def update_task(
             "unit_id": task.unit_id,
             "vendor_id": task.vendor_id,
             "recurring_template_id": task.recurring_template_id,
+            "estimated_cost": task.estimated_cost,
+            "actual_cost": task.actual_cost,
+            "completed_at": task.completed_at,
         },
     )
     return task
@@ -209,6 +215,9 @@ async def delete_task(
             "property_id": task.property_id,
             "unit_id": task.unit_id,
             "vendor_id": task.vendor_id,
+            "estimated_cost": task.estimated_cost,
+            "actual_cost": task.actual_cost,
+            "completed_at": task.completed_at,
         },
     )
     return Response(status_code=status.HTTP_204_NO_CONTENT)

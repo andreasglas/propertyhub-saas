@@ -11,6 +11,7 @@ from app.db.models.invoice import Invoice
 from app.db.models.payment import Payment
 from app.db.models.payment_reminder import PaymentReminder
 from app.db.models.property import Property
+from app.db.models.task import Task
 from app.db.models.tenant import Tenant
 from app.db.models.unit import Unit
 from app.schemas.report import DashboardReportRead, OpenInvoiceReportRow
@@ -64,6 +65,45 @@ class ReportService:
             )
             or 0
         )
+        open_tasks_count = int(
+            db.scalar(
+                select(func.count()).select_from(Task).where(
+                    Task.organization_id == organization_id,
+                    Task.status.in_(("open", "in_progress", "blocked")),
+                )
+            )
+            or 0
+        )
+        completed_tasks_count = int(
+            db.scalar(
+                select(func.count()).select_from(Task).where(
+                    Task.organization_id == organization_id,
+                    Task.status == "done",
+                )
+            )
+            or 0
+        )
+        overdue_tasks_count = int(
+            db.scalar(
+                select(func.count()).select_from(Task).where(
+                    Task.organization_id == organization_id,
+                    Task.status.in_(("open", "in_progress", "blocked")),
+                    Task.due_date.is_not(None),
+                    Task.due_date < date.today(),
+                )
+            )
+            or 0
+        )
+        total_estimated_task_cost = scalar_sum(
+            select(func.coalesce(func.sum(Task.estimated_cost), 0)).where(
+                Task.organization_id == organization_id
+            )
+        )
+        total_actual_task_cost = scalar_sum(
+            select(func.coalesce(func.sum(Task.actual_cost), 0)).where(
+                Task.organization_id == organization_id
+            )
+        )
 
         return DashboardReportRead(
             properties_count=count_for(Property),
@@ -72,12 +112,17 @@ class ReportService:
             contracts_count=count_for(Contract),
             invoices_count=count_for(Invoice),
             open_invoices_count=open_invoices_count,
+            open_tasks_count=open_tasks_count,
+            overdue_tasks_count=overdue_tasks_count,
+            completed_tasks_count=completed_tasks_count,
             payments_count=count_for(Payment),
             accounting_entries_count=count_for(AccountingEntry),
             total_invoice_amount=total_invoice_amount,
             total_payment_amount=total_payment_amount,
             total_income_amount=total_income_amount,
             total_expense_amount=total_expense_amount,
+            total_estimated_task_cost=total_estimated_task_cost,
+            total_actual_task_cost=total_actual_task_cost,
         )
 
     def list_open_invoices(

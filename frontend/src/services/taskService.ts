@@ -14,7 +14,11 @@ export type TaskItem = {
   priority: string;
   status: string;
   due_date?: string | null;
+  estimated_cost?: number | null;
+  actual_cost?: number | null;
   assignee_name?: string | null;
+  completion_notes?: string | null;
+  completed_at?: string | null;
   source: string;
 };
 
@@ -29,7 +33,10 @@ export type TaskPayload = {
   priority: string;
   status: string;
   due_date?: string | null;
+  estimated_cost?: number | null;
+  actual_cost?: number | null;
   assignee_name?: string | null;
+  completion_notes?: string | null;
   source: string;
 };
 
