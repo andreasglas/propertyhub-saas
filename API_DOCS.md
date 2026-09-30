@@ -105,6 +105,11 @@ Die folgenden Module sind als strukturierte Einstiegspunkte vorhanden:
 - `GET /api/v1/contracts/{contract_id}`
 - `PUT /api/v1/contracts/{contract_id}`
 - `DELETE /api/v1/contracts/{contract_id}`
+- `GET /api/v1/tasks/`
+- `POST /api/v1/tasks/`
+- `GET /api/v1/tasks/{task_id}`
+- `PUT /api/v1/tasks/{task_id}`
+- `DELETE /api/v1/tasks/{task_id}`
 - `GET /api/v1/invoices/`
 - `POST /api/v1/invoices/`
 - `GET /api/v1/invoices/overdue`
@@ -162,6 +167,13 @@ Wichtige Mutationen in Organisation, Benutzerverwaltung, Stammdaten, Billing, Ba
 Schreiboperationen sind aktuell auf die Rollen `owner` und `manager` beschränkt; `viewer` bleibt read-only.
 
 Alle Antworten liefern im Initial-Setup einen statusorientierten Payload, damit die Endpunkte früh integrierbar sind und später schrittweise mit Geschäftslogik hinterlegt werden können.
+
+## Aufgaben und Tickets
+
+- Aufgaben sind mandantenfähig und können optional auf Immobilie und Einheit referenzieren.
+- Unterstützte Kategorien sind aktuell `maintenance`, `inspection`, `tenant_request`, `accounting`, `compliance` und `other`.
+- Status und Priorität werden organisationsbezogen verwaltet und im Audit-Log protokolliert.
+- `viewer` kann Aufgaben lesen, aber nicht anlegen, aktualisieren oder löschen.
 
 ## Nebenkosten und Betriebskosten
 
