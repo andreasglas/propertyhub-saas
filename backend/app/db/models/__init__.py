@@ -4,6 +4,8 @@ from app.db.models.bank_transaction import BankTransaction
 from app.db.models.contract import Contract
 from app.db.models.document import Document
 from app.db.models.invoice import Invoice
+from app.db.models.operating_cost_item import OperatingCostItem
+from app.db.models.operating_cost_period import OperatingCostPeriod
 from app.db.models.payment import Payment
 from app.db.models.payment_reminder import PaymentReminder
 from app.db.models.property import Property
@@ -18,6 +20,8 @@ __all__ = [
     "Contract",
     "Document",
     "Invoice",
+    "OperatingCostItem",
+    "OperatingCostPeriod",
     "Payment",
     "PaymentReminder",
     "Property",

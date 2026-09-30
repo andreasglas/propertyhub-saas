@@ -7,6 +7,7 @@ import GroupsIcon from "@mui/icons-material/Groups";
 import HistoryIcon from "@mui/icons-material/History";
 import HomeWorkIcon from "@mui/icons-material/HomeWork";
 import MenuIcon from "@mui/icons-material/Menu";
+import PlumbingIcon from "@mui/icons-material/Plumbing";
 import PaidIcon from "@mui/icons-material/Paid";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import TableChartIcon from "@mui/icons-material/TableChart";
@@ -45,6 +46,7 @@ const navigationItems: Array<{ route: AppRoute; label: string; icon: JSX.Element
   { route: "units", label: "Einheiten", icon: <HomeWorkIcon fontSize="small" /> },
   { route: "tenants", label: "Mieter", icon: <GroupsIcon fontSize="small" /> },
   { route: "contracts", label: "Verträge", icon: <AssignmentIcon fontSize="small" /> },
+  { route: "operating-costs", label: "Nebenkosten", icon: <PlumbingIcon fontSize="small" /> },
   { route: "accounting", label: "Accounting", icon: <TableChartIcon fontSize="small" /> },
   { route: "billing", label: "Billing", icon: <ReceiptLongIcon fontSize="small" /> },
   { route: "banking", label: "Banking", icon: <PaidIcon fontSize="small" /> },

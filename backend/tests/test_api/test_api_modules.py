@@ -2277,6 +2277,190 @@ def test_audit_logs_are_scoped_to_authenticated_organization(
     )
 
 
+def test_operating_cost_periods_items_and_settlement_preview(
+    client: TestClient, auth_headers: dict[str, str], viewer_auth_headers: dict[str, str]
+) -> None:
+    property_response = client.post(
+        "/api/v1/properties/",
+        headers=auth_headers,
+        json={
+            "name": "Mehrfamilienhaus Nord",
+            "property_type": "residential",
+            "street": "Abrechnungsweg 1",
+            "postal_code": "10115",
+            "city": "Berlin",
+            "purchase_price": 900000,
+        },
+    )
+    property_id = property_response.json()["id"]
+
+    unit_a_response = client.post(
+        "/api/v1/units/",
+        headers=auth_headers,
+        json={
+            "property_id": property_id,
+            "name": "Wohnung A",
+            "unit_type": "apartment",
+            "status": "occupied",
+            "area_sqm": 50,
+        },
+    )
+    unit_b_response = client.post(
+        "/api/v1/units/",
+        headers=auth_headers,
+        json={
+            "property_id": property_id,
+            "name": "Wohnung B",
+            "unit_type": "apartment",
+            "status": "occupied",
+            "area_sqm": 100,
+        },
+    )
+    unit_a_id = unit_a_response.json()["id"]
+    unit_b_id = unit_b_response.json()["id"]
+
+    tenant_a_response = client.post(
+        "/api/v1/tenants/",
+        headers=auth_headers,
+        json={
+            "first_name": "Anna",
+            "last_name": "Mieter",
+            "email": "anna.mieter@example.com",
+            "phone": None,
+            "move_in_date": "2026-01-01",
+            "move_out_date": None,
+        },
+    )
+    tenant_b_response = client.post(
+        "/api/v1/tenants/",
+        headers=auth_headers,
+        json={
+            "first_name": "Bernd",
+            "last_name": "Mieter",
+            "email": "bernd.mieter@example.com",
+            "phone": None,
+            "move_in_date": "2026-01-01",
+            "move_out_date": None,
+        },
+    )
+    tenant_a_id = tenant_a_response.json()["id"]
+    tenant_b_id = tenant_b_response.json()["id"]
+
+    client.post(
+        "/api/v1/contracts/",
+        headers=auth_headers,
+        json={
+            "unit_id": unit_a_id,
+            "tenant_id": tenant_a_id,
+            "start_date": "2026-01-01",
+            "end_date": None,
+            "cold_rent": 900,
+            "service_charge_advance": 100,
+        },
+    )
+    client.post(
+        "/api/v1/contracts/",
+        headers=auth_headers,
+        json={
+            "unit_id": unit_b_id,
+            "tenant_id": tenant_b_id,
+            "start_date": "2026-01-01",
+            "end_date": None,
+            "cold_rent": 1200,
+            "service_charge_advance": 100,
+        },
+    )
+
+    create_period_response = client.post(
+        "/api/v1/operating-costs/periods",
+        headers=auth_headers,
+        json={
+            "property_id": property_id,
+            "name": "Nebenkosten 2026 Q1",
+            "period_start": "2026-01-01",
+            "period_end": "2026-03-31",
+            "status": "draft",
+        },
+    )
+    assert create_period_response.status_code == 201
+    period_id = create_period_response.json()["id"]
+
+    viewer_create_period_response = client.post(
+        "/api/v1/operating-costs/periods",
+        headers=viewer_auth_headers,
+        json={
+            "property_id": property_id,
+            "name": "Nicht erlaubt",
+            "period_start": "2026-01-01",
+            "period_end": "2026-03-31",
+            "status": "draft",
+        },
+    )
+    assert viewer_create_period_response.status_code == 403
+
+    item_area_response = client.post(
+        f"/api/v1/operating-costs/periods/{period_id}/items",
+        headers=auth_headers,
+        json={
+            "category": "heating",
+            "description": "Heizkosten",
+            "allocation_method": "area",
+            "amount": 300,
+            "billable": True,
+        },
+    )
+    assert item_area_response.status_code == 201
+
+    item_count_response = client.post(
+        f"/api/v1/operating-costs/periods/{period_id}/items",
+        headers=auth_headers,
+        json={
+            "category": "janitor",
+            "description": "Hausmeister",
+            "allocation_method": "unit_count",
+            "amount": 150,
+            "billable": True,
+        },
+    )
+    assert item_count_response.status_code == 201
+
+    periods_response = client.get("/api/v1/operating-costs/periods", headers=auth_headers)
+    assert periods_response.status_code == 200
+    assert len(periods_response.json()) == 1
+
+    items_response = client.get(
+        f"/api/v1/operating-costs/periods/{period_id}/items",
+        headers=auth_headers,
+    )
+    assert items_response.status_code == 200
+    assert len(items_response.json()) == 2
+
+    preview_response = client.get(
+        f"/api/v1/operating-costs/periods/{period_id}/settlement-preview",
+        headers=auth_headers,
+    )
+    assert preview_response.status_code == 200
+    preview_payload = preview_response.json()
+    assert preview_payload["total_billable_amount"] == 450
+    assert preview_payload["total_advance_amount"] == 600
+    assert len(preview_payload["lines"]) == 2
+    first_line = next(line for line in preview_payload["lines"] if line["unit_name"] == "Wohnung A")
+    second_line = next(line for line in preview_payload["lines"] if line["unit_name"] == "Wohnung B")
+    assert first_line["share_amount"] == 175
+    assert first_line["advance_paid_amount"] == 300
+    assert first_line["balance_amount"] == -125
+    assert second_line["share_amount"] == 275
+    assert second_line["advance_paid_amount"] == 300
+    assert second_line["balance_amount"] == -25
+
+    audit_response = client.get(
+        "/api/v1/audit-logs/?resource_type=operating_cost_period",
+        headers=auth_headers,
+    )
+    assert audit_response.status_code == 200
+    assert any(entry["action"] == "operating_cost_period.created" for entry in audit_response.json())
+
+
 def test_banking_csv_import_deduplicates_and_auto_matches_payment(
     client: TestClient, auth_headers: dict[str, str]
 ) -> None:

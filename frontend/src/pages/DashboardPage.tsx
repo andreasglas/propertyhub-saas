@@ -51,6 +51,16 @@ import {
 } from "../services/documentService";
 import { createInvoice, Invoice, listInvoices } from "../services/invoiceService";
 import {
+  createOperatingCostItem,
+  createOperatingCostPeriod,
+  getOperatingCostSettlementPreview,
+  listOperatingCostItems,
+  listOperatingCostPeriods,
+  OperatingCostItem,
+  OperatingCostPeriod,
+  OperatingCostSettlementPreview,
+} from "../services/operatingCostService";
+import {
   getCurrentOrganization,
   Organization,
   updateCurrentOrganization,
@@ -114,6 +124,11 @@ type UnitListControls = ListControls & {
 type ContractListControls = ListControls & {
   unit_id: string;
   tenant_id: string;
+};
+
+type OperatingCostListControls = ListControls & {
+  property_id: string;
+  status: string;
 };
 
 type DocumentListControls = ListControls & {
@@ -351,6 +366,11 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
   const [units, setUnits] = useState<Unit[]>([]);
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [contracts, setContracts] = useState<Contract[]>([]);
+  const [operatingCostPeriods, setOperatingCostPeriods] = useState<OperatingCostPeriod[]>([]);
+  const [operatingCostItems, setOperatingCostItems] = useState<OperatingCostItem[]>([]);
+  const [selectedOperatingCostPeriodId, setSelectedOperatingCostPeriodId] = useState("");
+  const [operatingCostPreview, setOperatingCostPreview] =
+    useState<OperatingCostSettlementPreview | null>(null);
   const [entries, setEntries] = useState<AccountingEntry[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -394,6 +414,20 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
     end_date: "",
     cold_rent: "0",
     service_charge_advance: "0",
+  });
+  const [operatingCostPeriodForm, setOperatingCostPeriodForm] = useState({
+    property_id: "",
+    name: "",
+    period_start: "",
+    period_end: "",
+    status: "draft",
+  });
+  const [operatingCostItemForm, setOperatingCostItemForm] = useState({
+    category: "heating",
+    description: "",
+    allocation_method: "area",
+    amount: "0",
+    billable: "true",
   });
   const [entryForm, setEntryForm] = useState({
     property_id: "",
@@ -453,6 +487,11 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
     unit_id: "all",
     tenant_id: "all",
   });
+  const [operatingCostList, setOperatingCostList] = useState<OperatingCostListControls>({
+    ...defaultListControls,
+    property_id: "all",
+    status: "all",
+  });
   const [invoiceList, setInvoiceList] = useState<InvoiceListControls>({
     ...defaultListControls,
     status: "all",
@@ -484,6 +523,7 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
         loadedUnits,
         loadedTenants,
         loadedContracts,
+        loadedOperatingCostPeriods,
         loadedEntries,
         loadedAuditLogs,
         loadedInvoices,
@@ -498,6 +538,7 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
         listUnits(),
         listTenants(),
         listContracts(),
+        listOperatingCostPeriods(),
         listAccountingEntries(),
         listAuditLogs({ limit: 200 }),
         listInvoices(),
@@ -523,6 +564,7 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
       setUnits(loadedUnits);
       setTenants(loadedTenants);
       setContracts(loadedContracts);
+      setOperatingCostPeriods(loadedOperatingCostPeriods);
       setEntries(loadedEntries);
       setAuditLogs(loadedAuditLogs);
       setInvoices(loadedInvoices);
@@ -715,6 +757,76 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
       await loadDashboardData();
     } catch {
       setLoadError("Vertrag konnte nicht gespeichert werden.");
+    }
+  }
+
+  async function loadOperatingCostPeriodDetails(periodId: string) {
+    if (!periodId) {
+      setOperatingCostItems([]);
+      setOperatingCostPreview(null);
+      return;
+    }
+    try {
+      const [loadedItems, loadedPreview] = await Promise.all([
+        listOperatingCostItems(periodId),
+        getOperatingCostSettlementPreview(periodId),
+      ]);
+      setOperatingCostItems(loadedItems);
+      setOperatingCostPreview(loadedPreview);
+    } catch {
+      setLoadError("Nebenkosten-Daten konnten nicht geladen werden.");
+    }
+  }
+
+  async function handleSubmitOperatingCostPeriod(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    try {
+      const createdPeriod = await createOperatingCostPeriod({
+        property_id: operatingCostPeriodForm.property_id,
+        name: operatingCostPeriodForm.name,
+        period_start: operatingCostPeriodForm.period_start,
+        period_end: operatingCostPeriodForm.period_end,
+        status: operatingCostPeriodForm.status,
+      });
+      setSelectedOperatingCostPeriodId(createdPeriod.id);
+      setOperatingCostPeriodForm((current) => ({
+        ...current,
+        name: "",
+        period_start: "",
+        period_end: "",
+      }));
+      await loadDashboardData();
+      await loadOperatingCostPeriodDetails(createdPeriod.id);
+    } catch {
+      setLoadError("Nebenkostenperiode konnte nicht gespeichert werden.");
+    }
+  }
+
+  async function handleSubmitOperatingCostItem(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedOperatingCostPeriodId) {
+      setLoadError("Bitte zuerst eine Nebenkostenperiode auswählen.");
+      return;
+    }
+    try {
+      await createOperatingCostItem(selectedOperatingCostPeriodId, {
+        category: operatingCostItemForm.category,
+        description: operatingCostItemForm.description || null,
+        allocation_method: operatingCostItemForm.allocation_method,
+        amount: Number(operatingCostItemForm.amount),
+        billable: operatingCostItemForm.billable === "true",
+      });
+      setOperatingCostItemForm({
+        category: "heating",
+        description: "",
+        allocation_method: "area",
+        amount: "0",
+        billable: "true",
+      });
+      await loadOperatingCostPeriodDetails(selectedOperatingCostPeriodId);
+      await loadDashboardData();
+    } catch {
+      setLoadError("Nebenkostenposition konnte nicht gespeichert werden.");
     }
   }
 
@@ -1052,6 +1164,32 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
     ],
   );
 
+  const filteredOperatingCostPeriods = useMemo(
+    () =>
+      operatingCostPeriods.filter((period) => {
+        const matchesProperty =
+          operatingCostList.property_id === "all" ||
+          period.property_id === operatingCostList.property_id;
+        const matchesStatus =
+          operatingCostList.status === "all" || period.status === operatingCostList.status;
+        const matchesPeriodSearch = matchesSearch(operatingCostList.search, [
+          period.name,
+          period.status,
+          period.period_start,
+          period.period_end,
+          propertyNameById.get(period.property_id),
+        ]);
+        return matchesProperty && matchesStatus && matchesPeriodSearch;
+      }),
+    [
+      operatingCostList.property_id,
+      operatingCostList.search,
+      operatingCostList.status,
+      operatingCostPeriods,
+      propertyNameById,
+    ],
+  );
+
   const filteredInvoices = useMemo(
     () =>
       invoices.filter((invoice) => {
@@ -1158,6 +1296,15 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
     };
   }, [currentRoute, hasRunningOcrJobs, isAuthenticated]);
 
+  useEffect(() => {
+    if (!selectedOperatingCostPeriodId) {
+      setOperatingCostItems([]);
+      setOperatingCostPreview(null);
+      return;
+    }
+    void loadOperatingCostPeriodDetails(selectedOperatingCostPeriodId);
+  }, [selectedOperatingCostPeriodId]);
+
   const pageTitles: Record<AppRoute, { title: string; subtitle: string }> = {
     overview: {
       title: "Immobilienverwaltung Dashboard",
@@ -1194,6 +1341,10 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
     contracts: {
       title: "Verträge",
       subtitle: "Mietverträge zwischen Einheit und Mieter pflegen.",
+    },
+    "operating-costs": {
+      title: "Nebenkosten & Betriebskosten",
+      subtitle: "Abrechnungsperioden, Kostenpositionen und Umlagen für Mietverträge vorbereiten.",
     },
     accounting: {
       title: "Accounting",
@@ -2442,6 +2593,311 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
                 </Typography>
               )}
             />
+          </Grid>
+        </Grid>
+      ) : null}
+
+      {currentRoute === "operating-costs" ? (
+        <Grid container spacing={2}>
+          {canManageData ? (
+            <>
+              <Grid item xs={12} md={5}>
+                <Card>
+                  <CardContent>
+                    <Typography variant="h6" gutterBottom>
+                      Nebenkostenperiode anlegen
+                    </Typography>
+                    <Stack component="form" spacing={2} onSubmit={handleSubmitOperatingCostPeriod}>
+                      <TextField
+                        select
+                        label="Immobilie"
+                        value={operatingCostPeriodForm.property_id}
+                        onChange={(event) =>
+                          setOperatingCostPeriodForm((current) => ({
+                            ...current,
+                            property_id: event.target.value,
+                          }))
+                        }
+                        required
+                      >
+                        <MenuItem value="">Immobilie wählen</MenuItem>
+                        {propertyOptions.map((option) => (
+                          <MenuItem key={option.value} value={option.value}>
+                            {option.label}
+                          </MenuItem>
+                        ))}
+                      </TextField>
+                      <TextField
+                        label="Bezeichnung"
+                        value={operatingCostPeriodForm.name}
+                        onChange={(event) =>
+                          setOperatingCostPeriodForm((current) => ({
+                            ...current,
+                            name: event.target.value,
+                          }))
+                        }
+                        required
+                      />
+                      <TextField
+                        label="Start"
+                        type="date"
+                        value={operatingCostPeriodForm.period_start}
+                        onChange={(event) =>
+                          setOperatingCostPeriodForm((current) => ({
+                            ...current,
+                            period_start: event.target.value,
+                          }))
+                        }
+                        InputLabelProps={{ shrink: true }}
+                        required
+                      />
+                      <TextField
+                        label="Ende"
+                        type="date"
+                        value={operatingCostPeriodForm.period_end}
+                        onChange={(event) =>
+                          setOperatingCostPeriodForm((current) => ({
+                            ...current,
+                            period_end: event.target.value,
+                          }))
+                        }
+                        InputLabelProps={{ shrink: true }}
+                        required
+                      />
+                      <Button type="submit" variant="contained">
+                        Periode speichern
+                      </Button>
+                    </Stack>
+                  </CardContent>
+                </Card>
+              </Grid>
+
+              <Grid item xs={12} md={7}>
+                <Card>
+                  <CardContent>
+                    <Typography variant="h6" gutterBottom>
+                      Kostenposition erfassen
+                    </Typography>
+                    <Stack component="form" spacing={2} onSubmit={handleSubmitOperatingCostItem}>
+                      <TextField
+                        select
+                        label="Periode"
+                        value={selectedOperatingCostPeriodId}
+                        onChange={(event) => setSelectedOperatingCostPeriodId(event.target.value)}
+                        required
+                      >
+                        <MenuItem value="">Periode wählen</MenuItem>
+                        {operatingCostPeriods.map((period) => (
+                          <MenuItem key={period.id} value={period.id}>
+                            {period.name} · {propertyNameById.get(period.property_id) ?? period.property_id}
+                          </MenuItem>
+                        ))}
+                      </TextField>
+                      <TextField
+                        label="Kategorie"
+                        value={operatingCostItemForm.category}
+                        onChange={(event) =>
+                          setOperatingCostItemForm((current) => ({
+                            ...current,
+                            category: event.target.value,
+                          }))
+                        }
+                        required
+                      />
+                      <TextField
+                        label="Beschreibung"
+                        value={operatingCostItemForm.description}
+                        onChange={(event) =>
+                          setOperatingCostItemForm((current) => ({
+                            ...current,
+                            description: event.target.value,
+                          }))
+                        }
+                      />
+                      <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
+                        <TextField
+                          select
+                          label="Verteilung"
+                          value={operatingCostItemForm.allocation_method}
+                          onChange={(event) =>
+                            setOperatingCostItemForm((current) => ({
+                              ...current,
+                              allocation_method: event.target.value,
+                            }))
+                          }
+                          fullWidth
+                        >
+                          <MenuItem value="area">Nach Fläche</MenuItem>
+                          <MenuItem value="unit_count">Gleichmäßig je Vertrag</MenuItem>
+                        </TextField>
+                        <TextField
+                          label="Betrag"
+                          type="number"
+                          value={operatingCostItemForm.amount}
+                          onChange={(event) =>
+                            setOperatingCostItemForm((current) => ({
+                              ...current,
+                              amount: event.target.value,
+                            }))
+                          }
+                          fullWidth
+                        />
+                        <TextField
+                          select
+                          label="Umlagefähig"
+                          value={operatingCostItemForm.billable}
+                          onChange={(event) =>
+                            setOperatingCostItemForm((current) => ({
+                              ...current,
+                              billable: event.target.value,
+                            }))
+                          }
+                          fullWidth
+                        >
+                          <MenuItem value="true">Ja</MenuItem>
+                          <MenuItem value="false">Nein</MenuItem>
+                        </TextField>
+                      </Stack>
+                      <Button type="submit" variant="contained" disabled={!selectedOperatingCostPeriodId}>
+                        Position speichern
+                      </Button>
+                    </Stack>
+                  </CardContent>
+                </Card>
+              </Grid>
+            </>
+          ) : null}
+
+          <Grid item xs={12} md={6}>
+            <ManagedListCard
+              title="Nebenkostenperioden"
+              items={filteredOperatingCostPeriods}
+              emptyText="Noch keine Nebenkostenperioden vorhanden."
+              searchValue={operatingCostList.search}
+              onSearchChange={(value) =>
+                setOperatingCostList((current) => ({ ...current, search: value, page: 1 }))
+              }
+              page={operatingCostList.page}
+              onPageChange={(page) => setOperatingCostList((current) => ({ ...current, page }))}
+              pageSize={operatingCostList.pageSize}
+              onPageSizeChange={(pageSize) =>
+                setOperatingCostList((current) => ({ ...current, pageSize, page: 1 }))
+              }
+              searchLabel="Periode oder Immobilie"
+              extraFilters={
+                <>
+                  <TextField
+                    select
+                    size="small"
+                    label="Immobilie"
+                    value={operatingCostList.property_id}
+                    onChange={(event) =>
+                      setOperatingCostList((current) => ({
+                        ...current,
+                        property_id: event.target.value,
+                        page: 1,
+                      }))
+                    }
+                    sx={{ minWidth: 180 }}
+                  >
+                    <MenuItem value="all">Alle Immobilien</MenuItem>
+                    {propertyOptions.map((option) => (
+                      <MenuItem key={option.value} value={option.value}>
+                        {option.label}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                  <TextField
+                    select
+                    size="small"
+                    label="Status"
+                    value={operatingCostList.status}
+                    onChange={(event) =>
+                      setOperatingCostList((current) => ({
+                        ...current,
+                        status: event.target.value,
+                        page: 1,
+                      }))
+                    }
+                    sx={{ minWidth: 160 }}
+                  >
+                    <MenuItem value="all">Alle Status</MenuItem>
+                    <MenuItem value="draft">Draft</MenuItem>
+                    <MenuItem value="finalized">Finalized</MenuItem>
+                  </TextField>
+                </>
+              }
+              renderPrimary={(period) => period.name}
+              renderSecondary={(period) =>
+                `${propertyNameById.get(period.property_id) ?? period.property_id} · ${period.period_start} bis ${period.period_end}`
+              }
+              renderDetails={(period) => (
+                <Typography color="text.secondary" variant="body2">
+                  Status: {period.status}
+                </Typography>
+              )}
+              renderActions={(period) => (
+                <Button
+                  size="small"
+                  variant={selectedOperatingCostPeriodId === period.id ? "contained" : "outlined"}
+                  onClick={() => setSelectedOperatingCostPeriodId(period.id)}
+                >
+                  Öffnen
+                </Button>
+              )}
+            />
+          </Grid>
+
+          <Grid item xs={12} md={6}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>
+                  Abrechnungsvorschau
+                </Typography>
+                {!selectedOperatingCostPeriodId ? (
+                  <Typography color="text.secondary">
+                    Bitte eine Nebenkostenperiode auswählen.
+                  </Typography>
+                ) : (
+                  <Stack spacing={2}>
+                    <Typography color="text.secondary" variant="body2">
+                      Positionen: {operatingCostItems.length} · Umlagefähige Summe:{" "}
+                      {formatCurrency(operatingCostPreview?.total_billable_amount ?? 0)}
+                    </Typography>
+                    <Typography color="text.secondary" variant="body2">
+                      Vorauszahlungen: {formatCurrency(operatingCostPreview?.total_advance_amount ?? 0)}
+                    </Typography>
+                    <List dense>
+                      {(operatingCostPreview?.lines ?? []).map((line) => (
+                        <ListItem key={line.contract_id} disableGutters>
+                          <ListItemText
+                            primary={`${line.tenant_name} · ${line.unit_name}`}
+                            secondary={`Anteil ${formatCurrency(line.share_amount)} · Vorauszahlung ${formatCurrency(line.advance_paid_amount)} · Saldo ${formatCurrency(line.balance_amount)}`}
+                          />
+                        </ListItem>
+                      ))}
+                      {!(operatingCostPreview?.lines.length ?? 0) ? (
+                        <Typography color="text.secondary">
+                          Noch keine abrechenbaren Verträge oder Positionen vorhanden.
+                        </Typography>
+                      ) : null}
+                    </List>
+                    <Divider />
+                    <Typography variant="subtitle2">Kostenpositionen</Typography>
+                    <List dense>
+                      {operatingCostItems.map((item) => (
+                        <ListItem key={item.id} disableGutters>
+                          <ListItemText
+                            primary={`${item.category} · ${formatCurrency(item.amount)}`}
+                            secondary={`${item.description ?? "Ohne Beschreibung"} · ${item.allocation_method} · ${item.billable ? "umlagefähig" : "nicht umlagefähig"}`}
+                          />
+                        </ListItem>
+                      ))}
+                    </List>
+                  </Stack>
+                )}
+              </CardContent>
+            </Card>
           </Grid>
         </Grid>
       ) : null}
