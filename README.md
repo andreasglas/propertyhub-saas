@@ -116,7 +116,7 @@ cd frontend
 VITE_API_BASE_URL=https://api.example.com/api npm run build
 ```
 
-Ohne Konfiguration bleibt `/api` der Standard für den lokalen Vite-Proxy. Die lokale App ist nun ebenfalls unter `http://localhost:5173/propertyhub-saas/` erreichbar. Für Einladungslinks des separat gehosteten Backends `FRONTEND_APP_URL=https://andreasglas.github.io/propertyhub-saas` setzen.
+Ohne Konfiguration bleibt `/api` der Standard für den lokalen Vite-Proxy. Der lokale Dev-Server bleibt unter `http://localhost:5173/` erreichbar; nur Produktionsbuilds verwenden den GitHub-Pages-Subpath. Für Einladungslinks des separat gehosteten Backends `FRONTEND_APP_URL=https://andreasglas.github.io/propertyhub-saas` setzen.
 
 ## Kernfunktionen des Grundgerüsts
 
