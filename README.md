@@ -103,11 +103,11 @@ Das Frontend nutzt im Development standardmäßig den relativen Pfad `/api`; lok
 3. Nach erfolgreichem Deployment in Safari öffnen: **https://andreasglas.github.io/propertyhub-saas/**
 4. Für die Installation auf dem iPhone: **Safari → Teilen → „Zum Home-Bildschirm“ → Hinzufügen**. Ein lokaler Server oder Computer ist dafür nicht nötig.
 
-Die PWA speichert die App-Oberfläche für spätere Offline-Aufrufe. Anmeldung, Geschäftsdaten und Änderungen benötigen weiterhin eine Verbindung zum Backend; API-Antworten werden nicht offline gespeichert.
+Die PWA speichert die App-Oberfläche für spätere Offline-Aufrufe. Im normalen Betrieb benötigen Anmeldung, Geschäftsdaten und Änderungen eine Verbindung zum Backend; API-Antworten werden nicht offline gespeichert. Im Demo-Modus liegen alle Daten lokal im Browser.
 
-**Wichtig:** GitHub Pages hostet nur das statische Frontend, nicht das FastAPI-Backend. Ohne erreichbares Backend bleibt die Anmeldeseite sichtbar; fehlgeschlagene Anmeldungen und Datenabrufe zeigen Fehlermeldungen statt eines weißen Bildschirms. Eine vollständige Dashboard-Vorschau mit Mock-Daten ist nicht enthalten.
+**Wichtig:** GitHub Pages hostet nur das statische Frontend, nicht das FastAPI-Backend. Der Pages-Build läuft deshalb standardmäßig im **Demo-Modus** (siehe unten): Anmeldung und alle Bereiche funktionieren mit fiktiven Beispieldaten komplett ohne Backend.
 
-Für ein separat gehostetes Backend unter **Settings → Secrets and variables → Actions → Variables** die Repository-Variable `VITE_API_BASE_URL` setzen, z. B. `https://api.example.com/api`. Die URL muss HTTPS verwenden; das Backend muss CORS für `https://andreasglas.github.io` erlauben. Danach den Workflow erneut starten: Vite übernimmt den Wert beim Build. Der Wert ist öffentlich im JavaScript sichtbar und darf keine Secrets enthalten.
+Für ein separat gehostetes Backend unter **Settings → Secrets and variables → Actions → Variables** die Repository-Variable `VITE_DEMO_MODE=false` und zusätzlich `VITE_API_BASE_URL` setzen, z. B. `https://api.example.com/api`. Die URL muss HTTPS verwenden; das Backend muss CORS für `https://andreasglas.github.io` erlauben. Danach den Workflow erneut starten: Vite übernimmt den Wert beim Build. Der Wert ist öffentlich im JavaScript sichtbar und darf keine Secrets enthalten.
 
 Lokal lässt sich derselbe Wert beim Build setzen:
 
@@ -117,6 +117,47 @@ VITE_API_BASE_URL=https://api.example.com/api npm run build
 ```
 
 Ohne Konfiguration bleibt `/api` der Standard für den lokalen Vite-Proxy. Der lokale Dev-Server bleibt unter `http://localhost:5173/` erreichbar; nur Produktionsbuilds verwenden den GitHub-Pages-Subpath. Für Einladungslinks des separat gehosteten Backends `FRONTEND_APP_URL=https://andreasglas.github.io/propertyhub-saas` setzen.
+
+## 🧪 Demo-Modus (ohne Backend)
+
+Der Demo-Modus macht die komplette Oberfläche ohne laufendes Backend testbar – z. B. auf dem iPhone über GitHub Pages. Alle API-Aufrufe des zentralen API-Clients (`frontend/src/services/apiClient.ts`) werden dann lokal im Browser von einem Mock-Backend (`frontend/src/demo/`) beantwortet; es findet **kein** Netzwerkzugriff auf eine API statt.
+
+**Aktivierung:** ausschließlich über das Build-Flag `VITE_DEMO_MODE=true`. Jeder andere Wert (oder kein Wert) bedeutet normalen Backendbetrieb mit echter Authentifizierung; der Demo-Code ist in normalen Builds nicht enthalten. Backendfehler fallen nie still auf Demo-Daten zurück. Der Pages-Workflow setzt `VITE_DEMO_MODE` standardmäßig auf `true` (abschaltbar über die Repository-Variable `VITE_DEMO_MODE=false`).
+
+**Öffentliche Demo-Zugangsdaten** (fiktiv, auch auf der Login-Seite angezeigt und vorausgefüllt):
+
+| E-Mail | Passwort | Rolle |
+| --- | --- | --- |
+| `demo@propertyhub.example` | `demo1234` | Owner – Vollzugriff inkl. Organisation & Benutzerverwaltung |
+| `manager@propertyhub.example` | `demo1234` | Manager – Stammdaten & Vorgänge bearbeiten |
+| `viewer@propertyhub.example` | `demo1234` | Viewer – nur lesen |
+
+Eine Beispiel-Einladung lässt sich unter `/setup-password?token=demo-invite-nina` öffnen.
+
+**Lokal nutzen:**
+
+```bash
+cd frontend
+npm ci
+VITE_DEMO_MODE=true npm run dev        # http://localhost:5173/
+# oder statischen Build wie auf Pages prüfen:
+VITE_DEMO_MODE=true npm run build && npm run preview   # http://localhost:4173/propertyhub-saas/
+```
+
+**Auf dem iPhone testen:** Nach dem Deployment **https://andreasglas.github.io/propertyhub-saas/** in Safari öffnen, mit `demo@propertyhub.example` / `demo1234` anmelden und über das Menü (☰) durch alle Bereiche navigieren. Unterseiten lassen sich direkt aufrufen und neu laden (über das vorhandene `404.html`-Weiterleitungskonzept).
+
+**Daten & Zurücksetzen:** Beispieldaten (Immobilien, Einheiten, Mieter, Verträge, Rechnungen, Zahlungen, Banking, Buchhaltung, Betriebskosten, Aufgaben inkl. Vorlagen/Kommentaren, Dokumente, Berichte, Organisation, Benutzer, Dienstleister, Audit-Log) sind miteinander verknüpft und enthalten verschiedene Status. Änderungen werden versioniert im `localStorage` unter eigenen Schlüsseln (`propertyhub.demo.data.v1`, Sitzung: `propertyhub.demo.auth.session`) gespeichert – getrennt vom normalen Login-Schlüssel. Der Button **„Demo-Daten zurücksetzen“** im Demo-Hinweis stellt den Ausgangszustand wieder her.
+
+**Grenzen des Demo-Modus:**
+
+- Alle Daten sind fiktiv und existieren nur in diesem Browser; es gibt keine Produktivwirkung und keine Synchronisation zwischen Geräten.
+- E-Mails (Einladungen) werden nicht versendet; Einladungslinks funktionieren nur im selben Browser.
+- Bankimport und OCR sind Simulationen (OCR läuft wenige Sekunden; Dateinamen mit „unscharf“ schlagen beim ersten Versuch fehl, um „Erneut versuchen“ zu zeigen).
+- Hochgeladene Dateien verlassen das Gerät nicht; gespeichert werden nur Dateiname und Metadaten.
+- Passwörter werden nicht gespeichert; alle Demo-Konten nutzen `demo1234`.
+- Operationen, die das Mock-Backend nicht kennt, werden mit einer verständlichen Meldung („Diese Funktion ist im Demo-Modus nicht verfügbar.“) abgelehnt, statt eine Netzwerkanfrage auszulösen.
+
+**Tests:** `cd frontend && npm test` (Vitest) prüft Aktivierung/Abgrenzung, Demo-Login/Logout/Reload, repräsentative CRUD-Flows, Rollen und dass im Demo-Modus keine Backend-Requests stattfinden.
 
 ## Kernfunktionen des Grundgerüsts
 

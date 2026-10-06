@@ -9,6 +9,7 @@ import {
 
 import { AuthUser, getCurrentUser, login as loginRequest } from "../services/authService";
 import { setAuthToken } from "../services/apiClient";
+import { DEMO_STORAGE_KEYS, isDemoModeEnabled } from "../demo/demoConfig";
 
 type AuthContextValue = {
   isAuthenticated: boolean;
@@ -20,7 +21,8 @@ type AuthContextValue = {
   logout: () => void;
 };
 
-const STORAGE_KEY = "propertyhub.auth.token";
+// Der Demo-Modus nutzt einen eigenen Schlüssel, damit Demo- und echte Sitzungen getrennt bleiben.
+const STORAGE_KEY = isDemoModeEnabled() ? DEMO_STORAGE_KEYS.session : "propertyhub.auth.token";
 
 const AuthContext = createContext<AuthContextValue>({
   isAuthenticated: false,

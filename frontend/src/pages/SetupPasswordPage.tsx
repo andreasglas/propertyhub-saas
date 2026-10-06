@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Alert, Box, Button, Card, CardContent, Stack, TextField, Typography } from "@mui/material";
 
+import { DEMO_PASSWORD, isDemoModeEnabled } from "../demo/demoConfig";
 import { getInvitationInfo, setupPassword } from "../services/authService";
 
 export function SetupPasswordPage() {
@@ -67,6 +68,12 @@ export function SetupPasswordPage() {
         </Typography>
       </div>
 
+      {isDemoModeEnabled() ? (
+        <Alert severity="warning">
+          Demo-Modus: Die Einladung wird nur simuliert. Das gewählte Passwort wird nicht gespeichert –
+          die Anmeldung erfolgt anschließend mit dem Demo-Passwort <strong>{DEMO_PASSWORD}</strong>.
+        </Alert>
+      ) : null}
       {loading ? <Alert severity="info">Einladung wird geladen...</Alert> : null}
       {errorMessage ? <Alert severity="error">{errorMessage}</Alert> : null}
       {successMessage ? <Alert severity="success">{successMessage}</Alert> : null}

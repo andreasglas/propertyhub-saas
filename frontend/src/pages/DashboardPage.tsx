@@ -24,6 +24,7 @@ import {
 
 import { AppRoute } from "../appRoutes";
 import { useAuth } from "../context/AuthContext";
+import { DEMO_ACCOUNTS, DEMO_PASSWORD, DEMO_PRIMARY_ACCOUNT, isDemoModeEnabled } from "../demo/demoConfig";
 import {
   AccountingEntry,
   createAccountingEntry,
@@ -112,10 +113,12 @@ import {
   UserInvitationResult,
 } from "../services/userAdminService";
 
-const defaultCredentials = {
-  email: "admin@example.com",
-  password: "test-password",
-};
+const defaultCredentials = isDemoModeEnabled()
+  ? { email: DEMO_PRIMARY_ACCOUNT.email, password: DEMO_PASSWORD }
+  : {
+      email: "admin@example.com",
+      password: "test-password",
+    };
 
 const defaultListControls = {
   search: "",
@@ -1826,9 +1829,24 @@ export function DashboardPage({ currentRoute }: DashboardPageProps) {
           </Typography>
         </div>
 
-        <Alert severity="info">
-          Melde dich mit dem Bootstrap-Admin aus der Backend-Konfiguration an.
-        </Alert>
+        {isDemoModeEnabled() ? (
+          <Alert severity="info" data-testid="demo-credentials">
+            <Typography variant="body2" gutterBottom>
+              Öffentliche Demo-Zugangsdaten (fiktiv, Passwort für alle Konten: <strong>{DEMO_PASSWORD}</strong>):
+            </Typography>
+            <Box component="ul" sx={{ pl: 2.5, my: 0 }}>
+              {DEMO_ACCOUNTS.map((account) => (
+                <Typography key={account.email} component="li" variant="body2" sx={{ wordBreak: "break-all" }}>
+                  <strong>{account.email}</strong> – {account.label}
+                </Typography>
+              ))}
+            </Box>
+          </Alert>
+        ) : (
+          <Alert severity="info">
+            Melde dich mit dem Bootstrap-Admin aus der Backend-Konfiguration an.
+          </Alert>
+        )}
 
         <Card>
           <CardContent>
