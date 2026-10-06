@@ -33,6 +33,8 @@ import {
 
 import { AppRoute } from "../appRoutes";
 import { useAuth } from "../context/AuthContext";
+import { isDemoModeEnabled } from "../demo/demoConfig";
+import { DemoBanner } from "./DemoBanner";
 
 const navigationItems: Array<{ route: AppRoute; label: string; icon: JSX.Element }> = [
   { route: "overview", label: "Übersicht", icon: <ApartmentIcon fontSize="small" /> },
@@ -206,6 +208,7 @@ export function AppShell({ children, currentRoute, onNavigate }: AppShellProps) 
       ) : null}
 
       <Container maxWidth="xl" sx={{ py: { xs: 3, md: 4 } }}>
+        {isDemoModeEnabled() ? <DemoBanner /> : null}
         {children}
       </Container>
     </Box>
