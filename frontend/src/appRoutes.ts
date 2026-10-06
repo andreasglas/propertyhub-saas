@@ -15,7 +15,7 @@ export type AppRoute =
   | "banking"
   | "documents";
 
-export const appRoutePaths: Record<AppRoute, string> = {
+const routePaths: Record<AppRoute, string> = {
   overview: "/",
   "setup-password": "/setup-password",
   activity: "/activity",
@@ -32,6 +32,13 @@ export const appRoutePaths: Record<AppRoute, string> = {
   banking: "/banking",
   documents: "/documents",
 };
+
+export const appRoutePaths = Object.fromEntries(
+  Object.entries(routePaths).map(([route, path]) => [
+    route,
+    import.meta.env.BASE_URL + path.slice(1),
+  ]),
+) as Record<AppRoute, string>;
 
 export function getRouteFromPath(pathname: string): AppRoute {
   const entry = Object.entries(appRoutePaths).find(([, path]) => path === pathname);

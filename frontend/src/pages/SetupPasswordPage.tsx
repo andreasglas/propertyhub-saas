@@ -48,7 +48,7 @@ export function SetupPasswordPage() {
       await setupPassword(token, password, fullName || null);
       setSuccessMessage("Passwort wurde gesetzt. Du kannst dich jetzt anmelden.");
       setPassword("");
-      window.history.pushState({}, "", "/");
+      window.history.pushState({}, "", import.meta.env.BASE_URL);
     } catch {
       setErrorMessage("Passwort konnte nicht gesetzt werden.");
     } finally {

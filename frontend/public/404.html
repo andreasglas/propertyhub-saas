@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PropertyHub – Weiterleitung</title>
+    <script>
+      try {
+        sessionStorage.setItem(
+          "propertyhub.pages.redirect",
+          location.pathname + location.search + location.hash,
+        );
+      } catch {
+        // The app root remains accessible if storage is unavailable.
+      }
+      location.replace("/propertyhub-saas/");
+    </script>
+  </head>
+  <body>
+    <a href="/propertyhub-saas/">PropertyHub öffnen</a>
+  </body>
+</html>

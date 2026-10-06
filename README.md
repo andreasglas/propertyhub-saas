@@ -96,6 +96,28 @@ npm run dev
 
 Das Frontend nutzt im Development standardmäßig den relativen Pfad `/api`; lokal übernimmt Vite das Proxying auf das Backend.
 
+## 📱 Auf dem iPhone / mobil öffnen
+
+1. Einmalig im Repository **Settings → Pages → Build and deployment → Source: GitHub Actions** auswählen.
+2. Nach dem Merge auf `main` läuft bei jedem Push automatisch der Workflow **Deploy frontend to GitHub Pages**. Er kann auch unter **Actions → Run workflow** manuell gestartet werden.
+3. Nach erfolgreichem Deployment in Safari öffnen: **https://andreasglas.github.io/propertyhub-saas/**
+4. Für die Installation auf dem iPhone: **Safari → Teilen → „Zum Home-Bildschirm“ → Hinzufügen**. Ein lokaler Server oder Computer ist dafür nicht nötig.
+
+Die PWA speichert die App-Oberfläche für spätere Offline-Aufrufe. Anmeldung, Geschäftsdaten und Änderungen benötigen weiterhin eine Verbindung zum Backend; API-Antworten werden nicht offline gespeichert.
+
+**Wichtig:** GitHub Pages hostet nur das statische Frontend, nicht das FastAPI-Backend. Ohne erreichbares Backend bleibt die Anmeldeseite sichtbar; fehlgeschlagene Anmeldungen und Datenabrufe zeigen Fehlermeldungen statt eines weißen Bildschirms. Eine vollständige Dashboard-Vorschau mit Mock-Daten ist nicht enthalten.
+
+Für ein separat gehostetes Backend unter **Settings → Secrets and variables → Actions → Variables** die Repository-Variable `VITE_API_BASE_URL` setzen, z. B. `https://api.example.com/api`. Die URL muss HTTPS verwenden; das Backend muss CORS für `https://andreasglas.github.io` erlauben. Danach den Workflow erneut starten: Vite übernimmt den Wert beim Build. Der Wert ist öffentlich im JavaScript sichtbar und darf keine Secrets enthalten.
+
+Lokal lässt sich derselbe Wert beim Build setzen:
+
+```bash
+cd frontend
+VITE_API_BASE_URL=https://api.example.com/api npm run build
+```
+
+Ohne Konfiguration bleibt `/api` der Standard für den lokalen Vite-Proxy. Der lokale Dev-Server bleibt unter `http://localhost:5173/` erreichbar; nur Produktionsbuilds verwenden den GitHub-Pages-Subpath. Für Einladungslinks des separat gehosteten Backends `FRONTEND_APP_URL=https://andreasglas.github.io/propertyhub-saas` setzen.
+
 ## Kernfunktionen des Grundgerüsts
 
 - FastAPI App mit versionierter API-Struktur
