@@ -33,7 +33,7 @@ export function DemoBanner() {
       <Typography variant="body2">
         Ausschließlich fiktive Beispieldaten – Änderungen haben keine Produktivwirkung.
       </Typography>
-      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
+      <Stack direction="row" flexWrap="wrap" sx={{ mt: 1, gap: 1 }}>
         <Button size="small" variant="outlined" color="warning" onClick={handleReset}>
           Demo-Daten zurücksetzen
         </Button>
