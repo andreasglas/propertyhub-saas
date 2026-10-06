@@ -622,7 +622,7 @@ route("put", "/users/:id", (context, [userId]) => {
   const body = asRecord(context.body);
   user.full_name = optionalString(body.full_name);
   user.role = oneOf(body.role, ["owner", "manager", "viewer"], "role");
-  user.is_active = body.is_active === true;
+  user.is_active = typeof body.is_active === "boolean" ? body.is_active : user.is_active;
   // Passwortänderungen werden im Demo-Modus nicht gespeichert; es gilt immer das Demo-Passwort.
   audit(context, actor, "user.updated", "user", user.id, `Benutzer ${user.email} aktualisiert`, {
     role: user.role,

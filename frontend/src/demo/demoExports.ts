@@ -22,11 +22,15 @@ function toPdfSafeText(value: string) {
     .replace(/ß/g, "ss")
     .replace(/€/g, "EUR")
     .replace(/[–—]/g, "-")
+    .replace(/·/g, "|")
     .replace(/[^\x20-\x7e]/g, "?")
     .replace(/([\\()])/g, "\\$1");
 }
 
-/** Erzeugt ein einfaches, gültiges einseitiges PDF ohne externe Bibliotheken. */
+/**
+ * Erzeugt ein einfaches, gültiges einseitiges PDF ohne externe Bibliotheken.
+ * `toPdfSafeText` stellt reines ASCII sicher, daher entsprechen String-Längen den Byte-Offsets.
+ */
 export function createSimplePdf(lines: string[]) {
   const maxLines = 48;
   const visibleLines =

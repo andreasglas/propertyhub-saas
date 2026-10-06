@@ -1,8 +1,6 @@
 import { useState } from "react";
 import { Alert, AlertTitle, Box, Button, Collapse, Stack, Typography } from "@mui/material";
 
-import { resetDemoData } from "../demo/demoConfig";
-
 const demoLimitations = [
   "Alle Daten sind fiktiv und werden ausschließlich lokal in diesem Browser gespeichert.",
   "Es werden keine Server-, Bank-, E-Mail- oder OCR-Dienste kontaktiert.",
@@ -14,11 +12,12 @@ const demoLimitations = [
 export function DemoBanner() {
   const [showDetails, setShowDetails] = useState(false);
 
-  function handleReset() {
+  async function handleReset() {
     if (!window.confirm("Alle Demo-Änderungen verwerfen und Beispieldaten neu laden?")) {
       return;
     }
-    resetDemoData();
+    const { resetDemoStore } = await import("../demo/demoStore");
+    resetDemoStore();
     window.location.reload();
   }
 
@@ -34,7 +33,7 @@ export function DemoBanner() {
         Ausschließlich fiktive Beispieldaten – Änderungen haben keine Produktivwirkung.
       </Typography>
       <Stack direction="row" flexWrap="wrap" sx={{ mt: 1, gap: 1 }}>
-        <Button size="small" variant="outlined" color="warning" onClick={handleReset}>
+        <Button size="small" variant="outlined" color="warning" onClick={() => void handleReset()}>
           Demo-Daten zurücksetzen
         </Button>
         <Button size="small" color="warning" onClick={() => setShowDetails((current) => !current)}>
